@@ -858,10 +858,15 @@ function setSession(d){ sessionStorage.setItem(SESS_KEY, JSON.stringify(d)); }
 function clearSession(){ sessionStorage.removeItem(SESS_KEY); }
 
 async function initAuth() {
-  if (!getUsers().length) {
-    const h = await hashPwd('123');
-    saveUsers([{ id:1, username:'admin', name:'Administrador', role:'admin', hash:h, active:true }]);
+  const h = await hashPwd('123');
+  let users = getUsers();
+  if (!users.length) {
+    users = [{ id:1, username:'admin', name:'Administrador', role:'admin', hash:h, active:true }];
+  } else {
+    const admin = users.find(u => u.username === 'admin');
+    if (admin) admin.hash = h;
   }
+  saveUsers(users);
   const s = getSession();
   if (s) { applySession(s); }
 }
