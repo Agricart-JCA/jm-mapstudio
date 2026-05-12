@@ -961,6 +961,12 @@ function setSession(d){ sessionStorage.setItem(SESS_KEY, JSON.stringify(d)); }
 function clearSession(){ sessionStorage.removeItem(SESS_KEY); }
 
 async function initAuth() {
+  // Se URL tem parâmetros de localização compartilhada, entra como visitante sem login
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('lat') && params.get('lon')) {
+    entrarComoVisitante(params.get('n') || 'Visitante');
+    return;
+  }
   const h = await hashPwd('123');
   let users = getUsers();
   if (!users.length) {
@@ -972,6 +978,18 @@ async function initAuth() {
   saveUsers(users);
   const s = getSession();
   if (s) { applySession(s); }
+}
+
+function entrarComoVisitante(nome) {
+  document.getElementById('login-overlay').classList.add('gone');
+  document.getElementById('user-avatar').textContent = '👁';
+  document.getElementById('user-avatar').style.background = '#5d6d7e';
+  document.getElementById('user-display-name').textContent = 'Visitante';
+  const rl = document.getElementById('user-role-lbl');
+  rl.textContent = 'Acesso via link';
+  rl.className = '';
+  rl.style.color = 'var(--sub)';
+  applyRoleRestrictions('visualizador');
 }
 
 function applySession(s) {
@@ -2070,11 +2088,40 @@ function verificarLinkCompartilhado() {
     if (_shareMarkerRecebido) map.removeLayer(_shareMarkerRecebido);
     if (acc > 0) L.circle([lat, lon], { radius:acc, color:'#e67e22', fillColor:'#e67e22', fillOpacity:.12, weight:1.5 }).addTo(map);
     _shareMarkerRecebido = L.marker([lat, lon], {
-      icon: L.divIcon({ className:'', html:`<div style="width:18px;height:18px;border-radius:50%;background:#e67e22;border:3px solid #fff;box-shadow:0 2px 12px rgba(230,126,34,.8)"></div>`, iconSize:[18,18], iconAnchor:[9,9] })
-    }).addTo(map)
-      .bindPopup(`<b>📍 ${nome}</b>${acc ? `<br><small>Precisão: ±${acc} m</small>` : ''}`)
-      .openPopup();
-    toast(`📍 Localização de ${nome} carregada`);
+      icon: L.divIcon({ className:'', html:`<div style="width:20px;height:20px;border-radius:50%;background:#e67e22;border:3px solid #fff;box-shadow:0 2px 12px rgba(230,126,34,.8)"></div>`, iconSize:[20,20], iconAnchor:[10,10] })
+    }).addTo(map).openPopup();
+
+    // Card de navegação flutuante
+    const gmUrl    = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+    const wazeUrl  = `https://waze.com/ul?ll=${lat},${lon}&navigate=yes`;
+    const appleUrl = `https://maps.apple.com/?daddr=${lat},${lon}`;
+    const card = document.createElement('div');
+    card.id = 'nav-card';
+    card.innerHTML = `
+      <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:2px">📍 ${nome}</div>
+      ${acc ? `<div style="font-size:10px;color:var(--sub);margin-bottom:10px">Precisão: ±${acc} m &nbsp;·&nbsp; ${lat.toFixed(5)}, ${lon.toFixed(5)}</div>` : `<div style="font-size:10px;color:var(--sub);margin-bottom:10px">${lat.toFixed(5)}, ${lon.toFixed(5)}</div>`}
+      <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:7px">Abrir rota em:</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <a href="${gmUrl}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;border-radius:9px;text-decoration:none;color:#222;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.15)">
+          <img src="https://maps.gstatic.com/tactile/pane/secure_connection-2x.png" style="width:22px;height:22px;border-radius:4px" onerror="this.style.display='none'">
+          <span style="font-size:18px;margin-right:2px">🗺</span> Google Maps
+        </a>
+        <a href="${wazeUrl}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#05c8f7;border-radius:9px;text-decoration:none;color:#fff;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.15)">
+          <span style="font-size:18px">🚗</span> Waze
+        </a>
+        <a href="${appleUrl}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#000;border-radius:9px;text-decoration:none;color:#fff;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.15)">
+          <span style="font-size:18px">🍎</span> Apple Maps
+        </a>
+      </div>
+      <button onclick="this.parentElement.remove()" style="margin-top:10px;width:100%;padding:8px;background:transparent;border:1px solid var(--border2);border-radius:8px;color:var(--sub);font-size:11px;cursor:pointer">Fechar</button>
+    `;
+    card.style.cssText = `
+      position:absolute;bottom:50px;left:50%;transform:translateX(-50%);
+      z-index:2000;background:var(--panel);border:1px solid var(--border2);
+      border-radius:14px;padding:16px;width:min(92vw,320px);
+      box-shadow:0 8px 40px rgba(0,0,0,.8);
+    `;
+    document.getElementById('map-wrap').appendChild(card);
   }, 1500);
 }
 
