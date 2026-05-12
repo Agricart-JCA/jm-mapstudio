@@ -467,9 +467,67 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 }
 .lf-sub-btn:hover { background:var(--red2); }
 .lf-sub-btn:disabled { opacity:.6; cursor:default; }
+
+/* ═══ MOBILE TOGGLE ═══ */
+#sidebar-toggle {
+  display:none;
+  position:fixed; top:10px; left:10px; z-index:2000;
+  width:40px; height:40px;
+  background:var(--red); border:none; border-radius:8px;
+  color:#fff; font-size:20px; cursor:pointer;
+  align-items:center; justify-content:center;
+  box-shadow:0 4px 16px rgba(0,0,0,.6);
+}
+
+/* ═══ RESPONSIVE MOBILE ═══ */
+@media (max-width: 768px) {
+  body { flex-direction:column; overflow:auto; }
+
+  #sidebar-toggle { display:flex; }
+
+  #sidebar {
+    position:fixed; top:0; left:0; bottom:0;
+    width:290px; min-width:unset;
+    z-index:1500;
+    transform:translateX(-100%);
+    transition:transform .25s ease;
+    box-shadow:4px 0 24px rgba(0,0,0,.8);
+  }
+  #sidebar.open { transform:translateX(0); }
+
+  #map-wrap { width:100%; height:100vh; }
+
+  #bottom-bar { font-size:10px; gap:10px; flex-wrap:wrap; padding:5px 10px; }
+
+  #login-card {
+    width:92vw; max-width:360px;
+    padding:28px 20px 24px;
+  }
+
+  #login-app-name { font-size:22px; }
+
+  .draw-btns { flex-wrap:wrap; }
+  .draw-btn { font-size:10px; padding:6px 4px; }
+
+  .sec-hdr-label { font-size:9px; }
+
+  #toast-wrap { top:8px; right:8px; left:8px; }
+  .toast { font-size:11px; }
+
+  /* overlay escuro ao abrir sidebar */
+  #sidebar-overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.5); z-index:1400;
+  }
+  #sidebar-overlay.open { display:block; }
+}
 </style>
 </head>
 <body>
+
+<!-- ══ MOBILE SIDEBAR TOGGLE ══ -->
+<button id="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
 
 <!-- ══ LOGIN OVERLAY ══ -->
 <div id="login-overlay">
@@ -792,7 +850,7 @@ function clearSession(){ sessionStorage.removeItem(SESS_KEY); }
 
 async function initAuth() {
   if (!getUsers().length) {
-    const h = await hashPwd('jmtopo@2024');
+    const h = await hashPwd('123');
     saveUsers([{ id:1, username:'admin', name:'Administrador', role:'admin', hash:h, active:true }]);
   }
   const s = getSession();
@@ -1704,6 +1762,17 @@ dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
 dz.addEventListener('drop',e=>{ e.preventDefault(); dz.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
 document.getElementById('map').addEventListener('dragover',e=>e.preventDefault());
 document.getElementById('map').addEventListener('drop',e=>{ e.preventDefault(); handleFiles(e.dataTransfer.files); });
+
+function toggleSidebar() {
+  const s = document.getElementById('sidebar');
+  const o = document.getElementById('sidebar-overlay');
+  s.classList.toggle('open');
+  o.classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
 </script>
 </body>
 </html>
