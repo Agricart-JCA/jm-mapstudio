@@ -706,6 +706,9 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       <button class="draw-btn" id="btn-kml"   onclick="exportAllDrawn('kml')"     disabled>⬇ KML</button>
       <button class="draw-btn danger" id="btn-clear" onclick="clearAllDrawn()"    disabled>🗑 Limpar</button>
     </div>
+    <div class="draw-btns" style="margin-top:6px">
+      <button class="draw-btn" id="btn-touch-draw" onclick="startTouchDraw()" style="flex:1;border-color:var(--amber);color:var(--amber)">👆 Desenhar Touch</button>
+    </div>
   </div>
 
   <!-- ── EDIT PANEL ── -->
@@ -792,6 +795,13 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 <!-- ══ MAP ══ -->
 <div id="map-wrap">
   <div id="map"></div>
+  <div id="touch-draw-bar" style="display:none;position:absolute;bottom:50px;left:50%;transform:translateX(-50%);z-index:2000;display:none;gap:8px;align-items:center;background:rgba(12,17,23,.95);border:1px solid var(--border2);border-radius:12px;padding:10px 14px;box-shadow:0 8px 32px rgba(0,0,0,.8);">
+    <span id="touch-draw-pts" style="font-size:11px;color:var(--sub);min-width:70px">0 pontos</span>
+    <button onclick="finishTouchDraw(true)"  style="background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">⬡ Polígono</button>
+    <button onclick="finishTouchDraw(false)" style="background:var(--blue);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">📏 Linha</button>
+    <button onclick="cancelTouchDraw()"      style="background:var(--card2);color:var(--sub);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer">✕</button>
+  </div>
+  <div id="touch-draw-hint" style="display:none;position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:2000;background:rgba(192,57,43,.9);color:#fff;padding:8px 16px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none">✏ Arraste o dedo para desenhar</div>
   <div id="toast-wrap"></div>
   <div id="measure-tooltip"></div>
   <div id="watermark">
@@ -1771,6 +1781,134 @@ function toggleSidebar() {
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════
+// TOUCH DRAWING
+// ══════════════════════════════════════════════
+let touchDrawActive  = false;
+let touchDrawPoints  = [];
+let touchDrawPreview = null;
+let touchDrawDotLayer = null;
+
+function startTouchDraw() {
+  if (touchDrawActive) { cancelTouchDraw(); return; }
+  closeSidebar();
+  touchDrawActive = true;
+  touchDrawPoints = [];
+  map.dragging.disable();
+  map.touchZoom.disable();
+  map.doubleClickZoom.disable();
+
+  const btn = document.getElementById('btn-touch-draw');
+  btn.style.borderColor = '#e74c3c';
+  btn.style.color = '#e74c3c';
+  btn.style.background = 'rgba(192,57,43,.18)';
+  btn.textContent = '✕ Cancelar Touch';
+
+  document.getElementById('touch-draw-hint').style.display = 'block';
+  document.getElementById('touch-draw-bar').style.display  = 'flex';
+
+  const canvas = document.getElementById('map');
+  canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+  canvas.addEventListener('touchmove',  onTouchMove,  { passive: false });
+  canvas.addEventListener('touchend',   onTouchEnd,   { passive: false });
+}
+
+function onTouchStart(e) {
+  if (!touchDrawActive) return;
+  e.preventDefault();
+  touchDrawPoints = [];
+  if (touchDrawPreview) { map.removeLayer(touchDrawPreview); touchDrawPreview = null; }
+  if (touchDrawDotLayer) { map.removeLayer(touchDrawDotLayer); touchDrawDotLayer = null; }
+  const t = e.touches[0];
+  touchDrawPoints.push(touchEventToLatLng(t));
+  updateTouchPreview();
+}
+
+function onTouchMove(e) {
+  if (!touchDrawActive || !e.touches.length) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  const ll = touchEventToLatLng(t);
+  const last = touchDrawPoints[touchDrawPoints.length - 1];
+  if (!last || map.distance(ll, last) > 3) {
+    touchDrawPoints.push(ll);
+    updateTouchPreview();
+  }
+}
+
+function onTouchEnd(e) {
+  if (!touchDrawActive) return;
+  e.preventDefault();
+  document.getElementById('touch-draw-hint').style.display = 'none';
+}
+
+function touchEventToLatLng(touch) {
+  const rect = document.getElementById('map').getBoundingClientRect();
+  const x = touch.clientX - rect.left;
+  const y = touch.clientY - rect.top;
+  return map.containerPointToLatLng([x, y]);
+}
+
+function updateTouchPreview() {
+  if (touchDrawPreview) map.removeLayer(touchDrawPreview);
+  const pts = touchDrawPoints;
+  document.getElementById('touch-draw-pts').textContent = pts.length + ' pontos';
+  if (pts.length < 2) return;
+  touchDrawPreview = L.polyline(pts, {
+    color: '#c0392b', weight: 3, opacity: 0.9,
+    dashArray: '6,4'
+  }).addTo(map);
+}
+
+function finishTouchDraw(asPolygon) {
+  if (touchDrawPoints.length < 2) { toast('Desenhe mais pontos primeiro', 'warn'); return; }
+
+  const style = { color:'#c0392b', fillColor:'#c0392b', fillOpacity:.18, weight:2.5 };
+  let layer;
+  if (asPolygon && touchDrawPoints.length >= 3) {
+    layer = L.polygon(touchDrawPoints, style);
+  } else {
+    layer = L.polyline(touchDrawPoints, { color:'#c0392b', weight:2.5 });
+  }
+
+  drawnItems.addLayer(layer);
+  pendingLayer = layer;
+  pendingType  = asPolygon ? 'Polígono' : 'Linha';
+  pendingColor = '#c0392b';
+  openEditPanel(layer, null);
+  resetTouchDraw();
+}
+
+function cancelTouchDraw() {
+  resetTouchDraw();
+  toast('Desenho cancelado');
+}
+
+function resetTouchDraw() {
+  touchDrawActive = false;
+  touchDrawPoints = [];
+  if (touchDrawPreview)  { map.removeLayer(touchDrawPreview);  touchDrawPreview  = null; }
+  if (touchDrawDotLayer) { map.removeLayer(touchDrawDotLayer); touchDrawDotLayer = null; }
+
+  map.dragging.enable();
+  map.touchZoom.enable();
+  map.doubleClickZoom.enable();
+
+  const canvas = document.getElementById('map');
+  canvas.removeEventListener('touchstart', onTouchStart);
+  canvas.removeEventListener('touchmove',  onTouchMove);
+  canvas.removeEventListener('touchend',   onTouchEnd);
+
+  const btn = document.getElementById('btn-touch-draw');
+  btn.style.borderColor = '';
+  btn.style.color = '';
+  btn.style.background = '';
+  btn.textContent = '👆 Desenhar Touch';
+
+  document.getElementById('touch-draw-hint').style.display = 'none';
+  document.getElementById('touch-draw-bar').style.display  = 'none';
 }
 </script>
 </body>
