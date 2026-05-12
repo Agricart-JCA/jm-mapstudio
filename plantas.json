@@ -1,0 +1,370 @@
+﻿{
+    "Campos dos Goytacazes":  {
+                                  "url":  "",
+                                  "nome":  "Campos dos Goytacazes"
+                              },
+    "Duas Barras":  {
+                        "url":  "",
+                        "nome":  "Duas Barras"
+                    },
+    "PetrÃ³polis":  {
+                        "url":  "",
+                        "nome":  "PetrÃ³polis"
+                    },
+    "Laje do MuriaÃ©":  {
+                            "url":  "",
+                            "nome":  "Laje do MuriaÃ©"
+                        },
+    "Cachoeiras de Macacu":  {
+                                 "url":  "",
+                                 "nome":  "Cachoeiras de Macacu"
+                             },
+    "Rio das Flores":  {
+                           "url":  "",
+                           "nome":  "Rio das Flores"
+                       },
+    "SÃ£o JoÃ£o da Barra":  {
+                                "url":  "",
+                                "nome":  "SÃ£o JoÃ£o da Barra"
+                            },
+    "Queimados":  {
+                      "url":  "",
+                      "nome":  "Queimados"
+                  },
+    "ConceiÃ§Ã£o de Macabu":  {
+                                  "url":  "",
+                                  "nome":  "ConceiÃ§Ã£o de Macabu"
+                              },
+    "AperibÃ©":  {
+                     "url":  "",
+                     "nome":  "AperibÃ©"
+                 },
+    "Carapebus":  {
+                      "url":  "",
+                      "nome":  "Carapebus"
+                  },
+    "Paraty":  {
+                   "url":  "",
+                   "nome":  "Paraty"
+               },
+    "Rio das Ostras":  {
+                           "url":  "",
+                           "nome":  "Rio das Ostras"
+                       },
+    "MaricÃ¡":  {
+                    "url":  "",
+                    "nome":  "MaricÃ¡"
+                },
+    "Mesquita":  {
+                     "url":  "",
+                     "nome":  "Mesquita"
+                 },
+    "Italva":  {
+                   "url":  "",
+                   "nome":  "Italva"
+               },
+    "SÃ£o Pedro da Aldeia":  {
+                                 "url":  "",
+                                 "nome":  "SÃ£o Pedro da Aldeia"
+                             },
+    "MacaÃ©":  {
+                   "url":  "",
+                   "nome":  "MacaÃ©"
+               },
+    "TeresÃ³polis":  {
+                         "url":  "",
+                         "nome":  "TeresÃ³polis"
+                     },
+    "Mendes":  {
+                   "url":  "",
+                   "nome":  "Mendes"
+               },
+    "Arraial do Cabo":  {
+                            "url":  "",
+                            "nome":  "Arraial do Cabo"
+                        },
+    "Bom Jardim":  {
+                       "url":  "",
+                       "nome":  "Bom Jardim"
+                   },
+    "Miracema":  {
+                     "url":  "",
+                     "nome":  "Miracema"
+                 },
+    "TanguÃ¡":  {
+                    "url":  "",
+                    "nome":  "TanguÃ¡"
+                },
+    "Cambuci":  {
+                    "url":  "",
+                    "nome":  "Cambuci"
+                },
+    "Areal":  {
+                  "url":  "",
+                  "nome":  "Areal"
+              },
+    "Silva Jardim":  {
+                         "url":  "",
+                         "nome":  "Silva Jardim"
+                     },
+    "Engenheiro Paulo de Frontin":  {
+                                        "url":  "",
+                                        "nome":  "Engenheiro Paulo de Frontin"
+                                    },
+    "Barra Mansa":  {
+                        "url":  "",
+                        "nome":  "Barra Mansa"
+                    },
+    "MagÃ©":  {
+                  "url":  "",
+                  "nome":  "MagÃ©"
+              },
+    "Rio Claro":  {
+                      "url":  "",
+                      "nome":  "Rio Claro"
+                  },
+    "Itaocara":  {
+                     "url":  "",
+                     "nome":  "Itaocara"
+                 },
+    "Vassouras":  {
+                      "url":  "",
+                      "nome":  "Vassouras"
+                  },
+    "Itaperuna":  {
+                      "url":  "",
+                      "nome":  "Itaperuna"
+                  },
+    "Santo AntÃ´nio de PÃ¡dua":  {
+                                     "url":  "",
+                                     "nome":  "Santo AntÃ´nio de PÃ¡dua"
+                                 },
+    "Sapucaia":  {
+                     "url":  "",
+                     "nome":  "Sapucaia"
+                 },
+    "Rio de Janeiro":  {
+                           "url":  "",
+                           "nome":  "Rio de Janeiro"
+                       },
+    "Quatis":  {
+                   "url":  "",
+                   "nome":  "Quatis"
+               },
+    "Barra do PiraÃ­":  {
+                            "url":  "",
+                            "nome":  "Barra do PiraÃ­"
+                        },
+    "Mangaratiba":  {
+                        "url":  "",
+                        "nome":  "Mangaratiba"
+                    },
+    "Casimiro de Abreu":  {
+                              "url":  "",
+                              "nome":  "Casimiro de Abreu"
+                          },
+    "Paty do Alferes":  {
+                            "url":  "",
+                            "nome":  "Paty do Alferes"
+                        },
+    "Itatiaia":  {
+                     "url":  "",
+                     "nome":  "Itatiaia"
+                 },
+    "Volta Redonda":  {
+                          "url":  "",
+                          "nome":  "Volta Redonda"
+                      },
+    "Cantagalo":  {
+                      "url":  "",
+                      "nome":  "Cantagalo"
+                  },
+    "Rio Bonito":  {
+                       "url":  "",
+                       "nome":  "Rio Bonito"
+                   },
+    "SÃ£o JosÃ© de UbÃ¡":  {
+                               "url":  "",
+                               "nome":  "SÃ£o JosÃ© de UbÃ¡"
+                           },
+    "ItaboraÃ­":  {
+                      "url":  "",
+                      "nome":  "ItaboraÃ­"
+                  },
+    "SÃ£o FidÃ©lis":  {
+                          "url":  "",
+                          "nome":  "SÃ£o FidÃ©lis"
+                      },
+    "Porto Real":  {
+                       "url":  "",
+                       "nome":  "Porto Real"
+                   },
+    "Paracambi":  {
+                      "url":  "",
+                      "nome":  "Paracambi"
+                  },
+    "SeropÃ©dica":  {
+                        "url":  "",
+                        "nome":  "SeropÃ©dica"
+                    },
+    "Cardoso Moreira":  {
+                            "url":  "",
+                            "nome":  "Cardoso Moreira"
+                        },
+    "Saquarema":  {
+                      "url":  "",
+                      "nome":  "Saquarema"
+                  },
+    "PorciÃºncula":  {
+                         "url":  "",
+                         "nome":  "PorciÃºncula"
+                     },
+    "Guapimirim":  {
+                       "url":  "",
+                       "nome":  "Guapimirim"
+                   },
+    "Varre-Sai":  {
+                      "url":  "",
+                      "nome":  "Varre-Sai"
+                  },
+    "Angra dos Reis":  {
+                           "url":  "",
+                           "nome":  "Angra dos Reis"
+                       },
+    "Araruama":  {
+                     "url":  "",
+                     "nome":  "Araruama"
+                 },
+    "ValenÃ§a":  {
+                     "url":  "",
+                     "nome":  "ValenÃ§a"
+                 },
+    "Macuco":  {
+                   "url":  "",
+                   "nome":  "Macuco"
+               },
+    "Trajano de Moraes":  {
+                              "url":  "",
+                              "nome":  "Trajano de Moraes"
+                          },
+    "NilÃ³polis":  {
+                       "url":  "",
+                       "nome":  "NilÃ³polis"
+                   },
+    "SÃ£o JosÃ© do Vale do Rio Preto":  {
+                                            "url":  "",
+                                            "nome":  "SÃ£o JosÃ© do Vale do Rio Preto"
+                                        },
+    "PiraÃ­":  {
+                   "url":  "",
+                   "nome":  "PiraÃ­"
+               },
+    "Pinheiral":  {
+                      "url":  "",
+                      "nome":  "Pinheiral"
+                  },
+    "Sumidouro":  {
+                      "url":  "",
+                      "nome":  "Sumidouro"
+                  },
+    "Natividade":  {
+                       "url":  "",
+                       "nome":  "Natividade"
+                   },
+    "Bom Jesus do Itabapoana":  {
+                                    "url":  "",
+                                    "nome":  "Bom Jesus do Itabapoana"
+                                },
+    "ArmaÃ§Ã£o dos BÃºzios":  {
+                                  "url":  "",
+                                  "nome":  "ArmaÃ§Ã£o dos BÃºzios"
+                              },
+    "SÃ£o Francisco de Itabapoana":  {
+                                         "url":  "",
+                                         "nome":  "SÃ£o Francisco de Itabapoana"
+                                     },
+    "Cabo Frio":  {
+                      "url":  "",
+                      "nome":  "Cabo Frio"
+                  },
+    "TrÃªs Rios":  {
+                       "url":  "",
+                       "nome":  "TrÃªs Rios"
+                   },
+    "Belford Roxo":  {
+                         "url":  "",
+                         "nome":  "Belford Roxo"
+                     },
+    "Miguel Pereira":  {
+                           "url":  "",
+                           "nome":  "Miguel Pereira"
+                       },
+    "QuissamÃ£":  {
+                      "url":  "",
+                      "nome":  "QuissamÃ£"
+                  },
+    "Nova Friburgo":  {
+                          "url":  "",
+                          "nome":  "Nova Friburgo"
+                      },
+    "ParaÃ­ba do Sul":  {
+                            "url":  "",
+                            "nome":  "ParaÃ­ba do Sul"
+                        },
+    "Resende":  {
+                    "url":  "",
+                    "nome":  "Resende"
+                },
+    "SÃ£o SebastiÃ£o do Alto":  {
+                                    "url":  "",
+                                    "nome":  "SÃ£o SebastiÃ£o do Alto"
+                                },
+    "Iguaba Grande":  {
+                          "url":  "",
+                          "nome":  "Iguaba Grande"
+                      },
+    "SÃ£o GonÃ§alo":  {
+                          "url":  "",
+                          "nome":  "SÃ£o GonÃ§alo"
+                      },
+    "Comendador Levy Gasparian":  {
+                                      "url":  "",
+                                      "nome":  "Comendador Levy Gasparian"
+                                  },
+    "ItaguaÃ­":  {
+                     "url":  "",
+                     "nome":  "ItaguaÃ­"
+                 },
+    "Santa Maria Madalena":  {
+                                 "url":  "",
+                                 "nome":  "Santa Maria Madalena"
+                             },
+    "NiterÃ³i":  {
+                     "url":  "",
+                     "nome":  "NiterÃ³i"
+                 },
+    "Japeri":  {
+                   "url":  "",
+                   "nome":  "Japeri"
+               },
+    "Nova IguaÃ§u":  {
+                         "url":  "",
+                         "nome":  "Nova IguaÃ§u"
+                     },
+    "SÃ£o JoÃ£o de Meriti":  {
+                                 "url":  "",
+                                 "nome":  "SÃ£o JoÃ£o de Meriti"
+                             },
+    "Carmo":  {
+                  "url":  "",
+                  "nome":  "Carmo"
+              },
+    "Duque de Caxias":  {
+                            "url":  "",
+                            "nome":  "Duque de Caxias"
+                        },
+    "Cordeiro":  {
+                     "url":  "",
+                     "nome":  "Cordeiro"
+                 }
+}

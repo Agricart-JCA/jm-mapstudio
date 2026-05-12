@@ -468,6 +468,19 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 .lf-sub-btn:hover { background:var(--red2); }
 .lf-sub-btn:disabled { opacity:.6; cursor:default; }
 
+/* ═══ CAMADA FUNDIÁRIA — Leaflet ═══ */
+.fund-polygon         { transition: fill-opacity .15s, stroke-width .15s; }
+.fund-polygon:hover   { cursor: pointer; }
+
+/* ═══ SPINNER ═══ */
+.fund-spinner {
+  width:28px; height:28px; border-radius:50%;
+  border:3px solid var(--border2);
+  border-top-color:var(--red);
+  animation:spin .7s linear infinite;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+
 /* ═══ CARDS FUNDIÁRIOS ═══ */
 .fund-card {
   background:var(--card); border:1px solid var(--border2);
@@ -930,113 +943,82 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
   <!-- ════ ABA 2 — ANÁLISE FUNDIÁRIA ════ -->
   <div id="tab-2" class="tab-panel">
 
-    <!-- Busca de localização -->
-    <div style="padding:12px 12px 0">
-      <div style="font-size:11px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📍 Pesquisar localização</div>
+    <!-- Busca -->
+    <div style="padding:12px 12px 8px;flex-shrink:0">
       <div class="search-row">
-        <input type="text" id="fund-search-input" placeholder="🔍 Endereço ou coordenada..." autocomplete="off"
-               style="flex:1;background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--text);font-family:var(--font);outline:none;"
+        <input type="text" id="fund-search-input" placeholder="🔍 Cidade, bairro ou endereço..." autocomplete="off"
+               style="flex:1;background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--text);font-family:var(--font);outline:none;transition:border-color .15s"
+               onfocus="this.style.borderColor='var(--red)'" onblur="this.style.borderColor=''"
                onkeydown="if(event.key==='Enter')fundSearch()">
-        <button onclick="fundSearch()" style="background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:14px;font-weight:700;cursor:pointer">→</button>
+        <button onclick="fundSearch()" style="background:var(--red);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0">→</button>
       </div>
       <div id="fund-search-results"></div>
     </div>
 
-    <!-- Status da análise -->
-    <div id="fund-status" style="margin:10px 12px 0;padding:10px 12px;background:var(--card);border-radius:8px;border:1px solid var(--border2);font-size:11px;color:var(--sub);display:none">
-      <span id="fund-status-text">Analisando localização…</span>
+    <!-- Loading -->
+    <div id="fund-loading" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:28px;gap:10px;flex-shrink:0">
+      <div class="fund-spinner"></div>
+      <div style="font-size:11px;color:var(--sub)">Carregando municípios do RJ…</div>
     </div>
 
-    <!-- Cards de camadas fundiárias -->
-    <div style="padding:12px;display:flex;flex-direction:column;gap:8px">
-
-      <div style="font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Camadas disponíveis</div>
-
-      <!-- CAR -->
-      <div class="fund-card" id="fund-card-car">
-        <div class="fund-card-header">
-          <div class="fund-card-dot" style="background:#27ae60"></div>
-          <div>
-            <div class="fund-card-title">CAR — Cadastro Ambiental Rural</div>
-            <div class="fund-card-sub">Imóveis rurais cadastrados no SICAR</div>
-          </div>
-          <div class="fund-card-badge fund-badge-breve">Em breve</div>
+    <!-- Painel do município selecionado -->
+    <div id="fund-mun-panel" style="display:none;margin:0 12px 10px;background:var(--card);border:1px solid var(--border2);border-radius:12px;overflow:hidden;flex-shrink:0">
+      <div style="background:var(--red);padding:12px 14px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">🏛</span>
+        <div>
+          <div id="fund-mun-nome" style="font-size:14px;font-weight:800;color:#fff;line-height:1.2">—</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.7);margin-top:1px">Município selecionado</div>
         </div>
-        <div class="fund-card-result" id="res-car"></div>
       </div>
-
-      <!-- SIGEF -->
-      <div class="fund-card" id="fund-card-sigef">
-        <div class="fund-card-header">
-          <div class="fund-card-dot" style="background:#2980b9"></div>
-          <div>
-            <div class="fund-card-title">SIGEF / INCRA</div>
-            <div class="fund-card-sub">Certificação e georreferenciamento de imóveis rurais</div>
-          </div>
-          <div class="fund-card-badge fund-badge-breve">Em breve</div>
+      <div style="padding:10px 14px;display:flex;gap:16px;border-bottom:1px solid var(--border)">
+        <div style="flex:1">
+          <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;font-weight:700">Área</div>
+          <div id="fund-mun-area" style="font-size:13px;font-weight:700;color:var(--text)">—</div>
         </div>
-        <div class="fund-card-result" id="res-sigef"></div>
-      </div>
-
-      <!-- APA -->
-      <div class="fund-card" id="fund-card-apa">
-        <div class="fund-card-header">
-          <div class="fund-card-dot" style="background:#8e44ad"></div>
-          <div>
-            <div class="fund-card-title">Áreas de Proteção Ambiental</div>
-            <div class="fund-card-sub">UC, APA, AEP — SNUC/IBAMA</div>
-          </div>
-          <div class="fund-card-badge fund-badge-breve">Em breve</div>
+        <div style="flex:1">
+          <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;font-weight:700">Cód. IBGE</div>
+          <div id="fund-mun-cod" style="font-size:13px;font-weight:700;color:var(--text)">—</div>
         </div>
-        <div class="fund-card-result" id="res-apa"></div>
-      </div>
-
-      <!-- Quilombola -->
-      <div class="fund-card" id="fund-card-quilombola">
-        <div class="fund-card-header">
-          <div class="fund-card-dot" style="background:#e67e22"></div>
-          <div>
-            <div class="fund-card-title">Territórios Quilombolas</div>
-            <div class="fund-card-sub">INCRA — Áreas tituladas e em processo</div>
-          </div>
-          <div class="fund-card-badge fund-badge-breve">Em breve</div>
+        <div style="flex:1">
+          <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;font-weight:700">UF</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">RJ</div>
         </div>
-        <div class="fund-card-result" id="res-quilombola"></div>
       </div>
-
-      <!-- Indigena -->
-      <div class="fund-card" id="fund-card-indigena">
-        <div class="fund-card-header">
-          <div class="fund-card-dot" style="background:#c0392b"></div>
+      <!-- Botão Drive -->
+      <div style="padding:12px 14px">
+        <a id="fund-btn-drive" href="#" target="_blank"
+           style="display:none;align-items:center;gap:12px;padding:12px 14px;background:linear-gradient(135deg,#1a73e8,#0d5bcc);border-radius:10px;text-decoration:none;color:#fff;font-size:13px;font-weight:700;box-shadow:0 4px 16px rgba(26,115,232,.4)">
+          <span style="font-size:22px">📂</span>
           <div>
-            <div class="fund-card-title">Terras Indígenas</div>
-            <div class="fund-card-sub">FUNAI — Homologadas e em estudo</div>
+            <div>Ver Plantas no Google Drive</div>
+            <div style="font-size:10px;font-weight:400;opacity:.85;margin-top:1px">PDFs da região disponíveis para download</div>
           </div>
-          <div class="fund-card-badge fund-badge-breve">Em breve</div>
+          <span style="margin-left:auto;font-size:16px">↗</span>
+        </a>
+        <div id="fund-no-plants" style="display:none;text-align:center;padding:10px 0;font-size:11px;color:var(--sub)">
+          📋 Plantas não cadastradas para este município
         </div>
-        <div class="fund-card-result" id="res-indigena"></div>
       </div>
-
-      <!-- Plantas PDF -->
-      <div class="fund-card" id="fund-card-plantas">
-        <div class="fund-card-header">
-          <div class="fund-card-dot" style="background:#f39c12"></div>
-          <div>
-            <div class="fund-card-title">Plantas em PDF</div>
-            <div class="fund-card-sub">Plantas da sua região disponíveis para download</div>
-          </div>
-          <div class="fund-card-badge fund-badge-breve">Em breve</div>
-        </div>
-        <div class="fund-card-result" id="res-plantas"></div>
-      </div>
-
     </div>
 
-    <!-- Aviso de desenvolvimento -->
-    <div style="margin:0 12px 16px;padding:12px;background:rgba(192,57,43,.07);border:1px solid rgba(192,57,43,.2);border-radius:10px;font-size:11px;color:var(--sub);line-height:1.7;text-align:center">
-      <div style="font-size:18px;margin-bottom:6px">🛰</div>
-      <strong style="color:var(--text)">Módulo em desenvolvimento</strong><br>
-      Esta aba integrará base de dados georreferenciada pública para análise fundiária completa. Em breve disponível.
+    <!-- Instrução inicial -->
+    <div id="fund-instrucao" style="padding:0 12px 12px;flex-shrink:0">
+      <div style="background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:28px;margin-bottom:8px">🗺</div>
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px">Análise Fundiária — RJ</div>
+        <div style="font-size:11px;color:var(--sub);line-height:1.7">
+          Pesquise um endereço acima<br>ou clique em um município no mapa<br>para acessar as plantas da região
+        </div>
+        <div id="fund-contador" style="margin-top:10px;font-size:10px;color:var(--dim)">Carregando…</div>
+      </div>
+    </div>
+
+    <!-- Camadas futuras -->
+    <div style="padding:0 12px 16px;display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+      <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Próximas integrações</div>
+      <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#27ae60"></div><div><div class="fund-card-title">CAR / SICAR</div><div class="fund-card-sub">Cadastro Ambiental Rural</div></div><div class="fund-card-badge fund-badge-breve">Em breve</div></div></div>
+      <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#2980b9"></div><div><div class="fund-card-title">SIGEF / INCRA</div><div class="fund-card-sub">Georreferenciamento de imóveis rurais</div></div><div class="fund-card-badge fund-badge-breve">Em breve</div></div></div>
+      <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#8e44ad"></div><div><div class="fund-card-title">Áreas de Proteção</div><div class="fund-card-sub">APA, UC — SNUC/IBAMA</div></div><div class="fund-card-badge fund-badge-breve">Em breve</div></div></div>
     </div>
 
   </div><!-- /tab-2 -->
@@ -2217,6 +2199,174 @@ function switchTab(n) {
     document.getElementById('tab-' + i).classList.toggle('active', i === n);
     document.getElementById('tabn-' + i).classList.toggle('active', i === n);
   });
+  if (n === 2) initFundiario();
+}
+
+// ══════════════════════════════════════════════
+// MÓDULO FUNDIÁRIO
+// ══════════════════════════════════════════════
+let _fundLayer    = null;
+let _fundSelected = null;
+let _fundPlantas  = {};
+let _fundGeoJSON  = null;
+let _fundLoaded   = false;
+
+async function initFundiario() {
+  if (_fundLoaded) return;
+  _fundLoaded = true;
+
+  document.getElementById('fund-loading').style.display = 'flex';
+  document.getElementById('fund-instrucao').style.display = 'none';
+
+  try {
+    const [gjRes, plRes] = await Promise.all([
+      fetch('./municipios_rj.geojson'),
+      fetch('./plantas.json').catch(() => null)
+    ]);
+
+    _fundGeoJSON = await gjRes.json();
+    if (plRes) _fundPlantas = await plRes.json().catch(() => ({}));
+
+    _fundLayer = L.geoJSON(_fundGeoJSON, {
+      style: _fundStyleDefault,
+      onEachFeature: _fundOnEach
+    }).addTo(map);
+
+    const total = _fundGeoJSON.features.length;
+    const comPlanta = Object.values(_fundPlantas).filter(v => v && v.url).length;
+
+    document.getElementById('fund-loading').style.display = 'none';
+    document.getElementById('fund-instrucao').style.display = 'block';
+    document.getElementById('fund-contador').textContent =
+      `${total} municípios · ${comPlanta} com plantas cadastradas`;
+
+    toast(`${total} municípios do RJ carregados`, 'ok');
+
+  } catch(e) {
+    document.getElementById('fund-loading').style.display = 'none';
+    document.getElementById('fund-instrucao').style.display = 'block';
+    document.getElementById('fund-contador').textContent = 'Erro ao carregar dados';
+    toast('Erro ao carregar municípios', 'warn');
+    _fundLoaded = false;
+  }
+}
+
+function _fundStyleDefault() {
+  return { color:'#c0392b', weight:1, fillColor:'#c0392b', fillOpacity:0.07, className:'fund-polygon' };
+}
+function _fundStyleHover()    { return { fillOpacity:0.22, weight:2, color:'#c0392b' }; }
+function _fundStyleSelected() { return { fillOpacity:0.32, weight:2.5, color:'#c0392b' }; }
+
+function _fundOnEach(feature, layer) {
+  layer.on({
+    mouseover: e => { if (_fundSelected !== e.target) e.target.setStyle(_fundStyleHover()); },
+    mouseout:  e => { if (_fundSelected !== e.target) e.target.setStyle(_fundStyleDefault()); },
+    click:     ()  => _selecionarMunicipio(feature, layer)
+  });
+}
+
+function _selecionarMunicipio(feature, layer) {
+  if (_fundSelected) _fundLayer.resetStyle(_fundSelected);
+  _fundSelected = layer;
+  layer.setStyle(_fundStyleSelected());
+
+  const p    = feature.properties;
+  const nome = p.NM_MUN || '';
+  const area = parseFloat(p.AREA_KM2 || 0).toFixed(1);
+  const cod  = p.CD_MUN || '—';
+
+  // Busca link no plantas.json (tenta nome exato ou case-insensitive)
+  const entrada = _fundPlantas[nome]
+    || Object.values(_fundPlantas).find(v => v.nome && v.nome.toLowerCase() === nome.toLowerCase())
+    || null;
+  const url = entrada ? (entrada.url || entrada) : '';
+
+  // Painel sidebar
+  document.getElementById('fund-instrucao').style.display = 'none';
+  const panel = document.getElementById('fund-mun-panel');
+  panel.style.display = 'block';
+  document.getElementById('fund-mun-nome').textContent = nome;
+  document.getElementById('fund-mun-area').textContent = area + ' km²';
+  document.getElementById('fund-mun-cod').textContent  = cod;
+
+  const btnDrive   = document.getElementById('fund-btn-drive');
+  const noPlants   = document.getElementById('fund-no-plants');
+  if (url) {
+    btnDrive.href          = url;
+    btnDrive.style.display = 'flex';
+    noPlants.style.display = 'none';
+  } else {
+    btnDrive.style.display = 'none';
+    noPlants.style.display = 'block';
+  }
+
+  // Popup no mapa
+  const centro = layer.getBounds().getCenter();
+  const popHtml = url
+    ? `<b>🏛 ${nome}</b><br><small>${area} km² · IBGE ${cod}</small>
+       <br><a href="${url}" target="_blank"
+              style="display:inline-block;margin-top:6px;padding:6px 12px;background:#1a73e8;color:#fff;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none">
+         📂 Ver Plantas no Drive ↗</a>`
+    : `<b>🏛 ${nome}</b><br><small>${area} km² · IBGE ${cod}</small>
+       <br><small style="color:#888">Plantas não cadastradas</small>`;
+
+  layer.bindPopup(popHtml, { maxWidth:220 }).openPopup();
+  map.fitBounds(layer.getBounds(), { padding:[40,40] });
+  closeSidebar();
+}
+
+// ── Point-in-polygon (ray casting) ───────────
+function _pointInRing(px, py, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi))
+      inside = !inside;
+  }
+  return inside;
+}
+
+function _pointInFeature(lon, lat, feature) {
+  const geom = feature.geometry;
+  if (!geom) return false;
+  const test = (rings) => _pointInRing(lon, lat, rings[0]);
+  if (geom.type === 'Polygon')      return test(geom.coordinates);
+  if (geom.type === 'MultiPolygon') return geom.coordinates.some(p => test(p));
+  return false;
+}
+
+function _findMunicipioPorPonto(lat, lon) {
+  if (!_fundGeoJSON) return null;
+  return _fundGeoJSON.features.find(f => _pointInFeature(lon, lat, f)) || null;
+}
+
+// ── Sobrescreve fundSelectLoc para usar camada fundiária ──
+function fundSelectLoc(lat, lon, nome) {
+  document.getElementById('fund-search-results').style.display = 'none';
+  document.getElementById('fund-search-input').value = nome;
+  map.setView([parseFloat(lat), parseFloat(lon)], 14);
+
+  if (window._fundMarker) map.removeLayer(window._fundMarker);
+  window._fundMarker = L.marker([lat, lon], {
+    icon: L.divIcon({ className:'',
+      html:`<div style="width:12px;height:12px;border-radius:50%;background:#f39c12;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.5)"></div>`,
+      iconSize:[12,12], iconAnchor:[6,6] })
+  }).addTo(map);
+
+  // Encontra o município pelo ponto
+  if (_fundGeoJSON) {
+    const feat = _findMunicipioPorPonto(parseFloat(lat), parseFloat(lon));
+    if (feat) {
+      // Acha o layer correspondente e seleciona
+      _fundLayer.eachLayer(l => {
+        if (l.feature === feat) _selecionarMunicipio(feat, l);
+      });
+      return;
+    }
+  }
+
+  closeSidebar();
 }
 
 // ── Busca fundiária (Nominatim, mesma base da busca principal) ──
