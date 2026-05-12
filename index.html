@@ -468,6 +468,48 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 .lf-sub-btn:hover { background:var(--red2); }
 .lf-sub-btn:disabled { opacity:.6; cursor:default; }
 
+/* ═══ SEARCH + GPS ═══ */
+#search-section { padding:8px 12px 4px; flex-shrink:0; }
+.search-row { display:flex; gap:6px; }
+#search-input {
+  flex:1; background:var(--card); border:1px solid var(--border2);
+  border-radius:8px; padding:8px 10px; font-size:12px; color:var(--text);
+  font-family:var(--font); outline:none; transition:border-color .15s;
+}
+#search-input:focus { border-color:var(--red); }
+#search-input::placeholder { color:var(--sub); }
+#search-btn {
+  background:var(--red); color:#fff; border:none; border-radius:8px;
+  padding:8px 12px; font-size:14px; cursor:pointer; font-weight:700;
+  transition:background .15s; flex-shrink:0;
+}
+#search-btn:hover { background:var(--red2); }
+#search-results {
+  margin-top:4px; background:var(--card); border-radius:8px;
+  border:1px solid var(--border2); overflow:hidden; display:none;
+}
+.sr-item {
+  padding:8px 10px; font-size:11px; color:var(--text); cursor:pointer;
+  border-bottom:1px solid var(--border); line-height:1.4;
+  transition:background .1s;
+}
+.sr-item:last-child { border-bottom:none; }
+.sr-item:hover { background:var(--card2); }
+.sr-item small { color:var(--sub); display:block; font-size:10px; }
+.sr-empty { padding:10px; font-size:11px; color:var(--sub); text-align:center; }
+
+/* GPS button */
+#gps-btn {
+  position:absolute; bottom:48px; right:12px; z-index:1000;
+  width:40px; height:40px; border-radius:10px;
+  background:var(--card2); border:1px solid var(--border2);
+  font-size:18px; cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,.5);
+  transition:background .15s; display:flex; align-items:center; justify-content:center;
+}
+#gps-btn:hover { background:var(--red); border-color:var(--red); }
+#gps-btn.locating { animation:pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
 /* ═══ MOBILE TOGGLE ═══ */
 #sidebar-toggle {
   display:none;
@@ -687,6 +729,16 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     <button class="ub-btn" onclick="doLogout()" title="Sair do sistema">⏻</button>
   </div>
 
+  <!-- ── BUSCA + GPS ── -->
+  <div id="search-section">
+    <div class="search-row">
+      <input type="text" id="search-input" placeholder="🔍 Buscar endereço..." autocomplete="off"
+             onkeydown="if(event.key==='Enter')searchAddress()">
+      <button id="search-btn" onclick="searchAddress()" title="Buscar">→</button>
+    </div>
+    <div id="search-results"></div>
+  </div>
+
   <!-- ── DROPZONE ── -->
   <div id="dropzone" onclick="document.getElementById('file-input').click()">
     <div class="dz-icon">📂</div>
@@ -801,6 +853,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     <button onclick="finishTouchDraw(false)" style="background:var(--blue);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">📏 Linha</button>
     <button onclick="cancelTouchDraw()"      style="background:var(--card2);color:var(--sub);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer">✕</button>
   </div>
+  <button id="gps-btn" onclick="goToGPS()" title="Minha localização">📍</button>
   <div id="touch-draw-hint" style="display:none;position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:2000;background:rgba(192,57,43,.9);color:#fff;padding:8px 16px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none">✏ Arraste o dedo para desenhar</div>
   <div id="toast-wrap"></div>
   <div id="measure-tooltip"></div>
@@ -1776,6 +1829,111 @@ dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
 dz.addEventListener('drop',e=>{ e.preventDefault(); dz.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
 document.getElementById('map').addEventListener('dragover',e=>e.preventDefault());
 document.getElementById('map').addEventListener('drop',e=>{ e.preventDefault(); handleFiles(e.dataTransfer.files); });
+
+// ══════════════════════════════════════════════
+// BUSCA DE ENDEREÇO — Nominatim (OpenStreetMap)
+// ══════════════════════════════════════════════
+let searchMarker = null;
+
+async function searchAddress() {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q) return;
+  const btn = document.getElementById('search-btn');
+  const box = document.getElementById('search-results');
+  btn.textContent = '…'; btn.disabled = true;
+  box.style.display = 'none'; box.innerHTML = '';
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&addressdetails=1&q=${encodeURIComponent(q)}`;
+    const res  = await fetch(url, { headers:{ 'Accept-Language':'pt-BR,pt;q=0.9' } });
+    const data = await res.json();
+    if (!data.length) {
+      box.innerHTML = '<div class="sr-empty">Nenhum resultado encontrado</div>';
+      box.style.display = 'block'; return;
+    }
+    box.innerHTML = data.map((r,i) => {
+      const name  = r.display_name.split(',')[0];
+      const resto = r.display_name.split(',').slice(1,3).join(',').trim();
+      return `<div class="sr-item" onclick="selectAddress(${i})">
+        ${name}<small>${resto}</small>
+      </div>`;
+    }).join('');
+    box.style.display = 'block';
+    box._data = data;
+  } catch(e) {
+    box.innerHTML = '<div class="sr-empty">Erro na busca. Verifique a conexão.</div>';
+    box.style.display = 'block';
+  } finally {
+    btn.textContent = '→'; btn.disabled = false;
+  }
+}
+
+function selectAddress(i) {
+  const box  = document.getElementById('search-results');
+  const item = box._data[i];
+  const lat  = parseFloat(item.lat);
+  const lon  = parseFloat(item.lon);
+  const name = item.display_name.split(',')[0];
+
+  map.setView([lat, lon], 16);
+
+  if (searchMarker) map.removeLayer(searchMarker);
+  searchMarker = L.marker([lat, lon], {
+    icon: L.divIcon({
+      className:'',
+      html:`<div style="background:#c0392b;width:14px;height:14px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.6)"></div>`,
+      iconSize:[14,14], iconAnchor:[7,7]
+    })
+  }).addTo(map).bindPopup(`<b>${name}</b><br><small>${item.display_name.split(',').slice(1,3).join(',')}</small>`).openPopup();
+
+  box.style.display = 'none';
+  document.getElementById('search-input').value = name;
+  closeSidebar();
+}
+
+// ══════════════════════════════════════════════
+// GPS — Localização do dispositivo
+// ══════════════════════════════════════════════
+let gpsMarker  = null;
+let gpsCircle  = null;
+let gpsWatchId = null;
+
+function goToGPS() {
+  if (!navigator.geolocation) { toast('GPS não suportado neste dispositivo', 'warn'); return; }
+  const btn = document.getElementById('gps-btn');
+  btn.classList.add('locating');
+  toast('Obtendo localização…');
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      btn.classList.remove('locating');
+      const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+      map.setView([lat, lon], 17);
+
+      if (gpsMarker) map.removeLayer(gpsMarker);
+      if (gpsCircle) map.removeLayer(gpsCircle);
+
+      gpsCircle = L.circle([lat, lon], {
+        radius: accuracy, color:'#2980b9', fillColor:'#2980b9',
+        fillOpacity:.12, weight:1.5
+      }).addTo(map);
+
+      gpsMarker = L.marker([lat, lon], {
+        icon: L.divIcon({
+          className:'',
+          html:`<div style="width:16px;height:16px;border-radius:50%;background:#2980b9;border:3px solid #fff;box-shadow:0 2px 10px rgba(41,128,185,.7)"></div>`,
+          iconSize:[16,16], iconAnchor:[8,8]
+        })
+      }).addTo(map)
+        .bindPopup(`<b>Você está aqui</b><br><small>Precisão: ±${Math.round(accuracy)} m</small>`)
+        .openPopup();
+    },
+    err => {
+      btn.classList.remove('locating');
+      const msgs = { 1:'Permissão de GPS negada', 2:'GPS indisponível', 3:'Tempo esgotado' };
+      toast(msgs[err.code] || 'Erro no GPS', 'warn');
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+}
 
 function toggleSidebar() {
   const s = document.getElementById('sidebar');
