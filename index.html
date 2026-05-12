@@ -501,6 +501,8 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 /* Share section */
 #share-section { border-bottom:1px solid var(--border); flex-shrink:0; }
 #share-section input:focus { border-color:var(--green) !important; }
+#map-wrap.pick-mode { cursor:crosshair !important; }
+#map-wrap.pick-mode .leaflet-container { cursor:crosshair !important; }
 
 /* GPS button */
 #gps-btn {
@@ -804,12 +806,16 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       <span class="sec-hdr-icon">📤</span>
       <span class="sec-hdr-label">Compartilhar Localização</span>
     </div>
-    <div style="padding:0 12px 12px">
-      <input type="text" id="share-name" placeholder="Seu nome (opcional)" maxlength="40"
-             style="width:100%;background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--text);font-family:var(--font);outline:none;margin-bottom:8px;box-sizing:border-box;">
+    <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:7px">
+      <input type="text" id="share-name" placeholder="Nome/descrição (opcional)" maxlength="60"
+             style="width:100%;background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--text);font-family:var(--font);outline:none;box-sizing:border-box;">
       <button onclick="gerarLinkLocalizacao()"
-              style="width:100%;padding:10px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);">
-        📍 Gerar Link da Minha Localização
+              style="width:100%;padding:10px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);">
+        📍 Usar meu GPS
+      </button>
+      <button onclick="ativarPickNoMapa()"  id="btn-pick-map"
+              style="width:100%;padding:10px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);">
+        🗺 Escolher ponto no mapa
       </button>
     </div>
   </div>
@@ -903,6 +909,10 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
         Fechar
       </button>
     </div>
+  </div>
+  <div id="pick-map-hint" style="display:none;position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:2000;background:rgba(41,128,185,.95);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;font-weight:700;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.5);display:none;align-items:center;gap:10px;">
+    <span>🗺 Toque em qualquer ponto do mapa</span>
+    <button onclick="cancelarPickNoMapa()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:3px 10px;font-size:12px;cursor:pointer;font-weight:700">✕ Cancelar</button>
   </div>
   <div id="touch-draw-hint" style="display:none;position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:2000;background:rgba(192,57,43,.9);color:#fff;padding:8px 16px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none">✏ Arraste o dedo para desenhar</div>
   <div id="toast-wrap"></div>
@@ -1449,9 +1459,11 @@ function bindDrawnEvents(layer, entry){
     if(layer instanceof L.Polyline){ fields.push(['Comprimento',fmtLen(calcLen(layer.getLatLngs().map(ll=>[ll.lat,ll.lng])))]); }
     showInfo(fields);
   });
-  const pop = entry.comment
+  const centro = layer instanceof L.Marker ? layer.getLatLng() : layer.getBounds ? layer.getBounds().getCenter() : null;
+  const navHtml = centro ? _buildNavButtons(centro.lat, centro.lng) : '';
+  const pop = (entry.comment
     ? `<b>${entry.name}</b><br>${entry.type} · ${entry.meas}<br><i style="color:#aaa;font-size:11px">${entry.comment}</i>`
-    : `<b>${entry.name}</b><br>${entry.type} · ${entry.meas}`;
+    : `<b>${entry.name}</b><br>${entry.type} · ${entry.meas}`) + navHtml;
   layer.bindPopup(pop);
 }
 
@@ -1595,7 +1607,7 @@ function parseKML(txt,fname,color){
       const area=calcArea(coords),peri=calcLen([...coords,coords[0]]);
       const poly=L.polygon(coords,{color,fillColor:color,fillOpacity:.18,weight:2.5});
       poly.on('click',()=>showInfo([['Nome',name],['Tipo','Polígono'],['Área',fmtArea(area)],['Perímetro',fmtLen(peri)]]));
-      poly.bindPopup(`<b>${name}</b><br>Área: ${fmtArea(area)}<br>Perímetro: ${fmtLen(peri)}`);
+      const cPoly = poly.getBounds().getCenter(); poly.bindPopup(`<b>${name}</b><br>Área: ${fmtArea(area)}<br>Perímetro: ${fmtLen(peri)}` + _buildNavButtons(cPoly.lat, cPoly.lng));
       poly.addTo(group); count++;
     });
     pm.querySelectorAll('LineString').forEach(ls=>{
@@ -1604,7 +1616,7 @@ function parseKML(txt,fname,color){
       const len=calcLen(coords);
       const line=L.polyline(coords,{color,weight:3});
       line.on('click',()=>showInfo([['Nome',name],['Tipo','Linha'],['Comprimento',fmtLen(len)]]));
-      line.bindPopup(`<b>${name}</b><br>${fmtLen(len)}`); line.addTo(group); count++;
+      const cLine = line.getLatLngs()[0]; line.bindPopup(`<b>${name}</b><br>${fmtLen(len)}` + _buildNavButtons(cLine.lat, cLine.lng)); line.addTo(group); count++;
     });
     pm.querySelectorAll('Point').forEach(pt=>{
       const el=pt.querySelector('coordinates'); if(!el) return;
@@ -1612,7 +1624,7 @@ function parseKML(txt,fname,color){
       const[lat,lon]=coords[0];
       const mk=L.circleMarker(coords[0],{radius:6,color,fillColor:color,fillOpacity:.85,weight:2});
       mk.on('click',()=>showInfo([['Nome',name],['Tipo','Ponto'],['Lat',lat.toFixed(6)],['Lon',lon.toFixed(6)]]));
-      mk.bindPopup(`<b>${name}</b><br>${lat.toFixed(6)}, ${lon.toFixed(6)}`); mk.addTo(group); count++;
+      mk.bindPopup(`<b>${name}</b><br>${lat.toFixed(6)}, ${lon.toFixed(6)}` + _buildNavButtons(lat, lon)); mk.addTo(group); count++;
     });
   });
   return{group,count};
@@ -1647,8 +1659,8 @@ function parseDXF(txt,fname,color){
       const closed=(parseInt(get(70)||'0')&1)===1, xs=getAll(10), ys=getAll(20);
       const coords=xs.map((x,i)=>toLL(x,ys[i])).filter(Boolean); if(coords.length<2) continue;
       let shape;
-      if(closed&&coords.length>=3){ const area=calcArea(coords),peri=calcLen([...coords,coords[0]]); shape=L.polygon(coords,{color,fillColor:color,fillOpacity:.18,weight:2.5}); shape.on('click',()=>showInfo([['Camada',layer],['Tipo','Polígono'],['Área',fmtArea(area)],['Perímetro',fmtLen(peri)]])); shape.bindPopup(`<b>${layer}</b><br>Área: ${fmtArea(area)}`); }
-      else{ const len=calcLen(coords); shape=L.polyline(coords,{color,weight:2.5}); shape.on('click',()=>showInfo([['Camada',layer],['Tipo','Linha'],['Comprimento',fmtLen(len)]])); shape.bindPopup(`<b>${layer}</b><br>${fmtLen(len)}`); }
+      if(closed&&coords.length>=3){ const area=calcArea(coords),peri=calcLen([...coords,coords[0]]); shape=L.polygon(coords,{color,fillColor:color,fillOpacity:.18,weight:2.5}); shape.on('click',()=>showInfo([['Camada',layer],['Tipo','Polígono'],['Área',fmtArea(area)],['Perímetro',fmtLen(peri)]])); const cDxfPoly=shape.getBounds().getCenter(); shape.bindPopup(`<b>${layer}</b><br>Área: ${fmtArea(area)}`+_buildNavButtons(cDxfPoly.lat,cDxfPoly.lng)); }
+      else{ const len=calcLen(coords); shape=L.polyline(coords,{color,weight:2.5}); shape.on('click',()=>showInfo([['Camada',layer],['Tipo','Linha'],['Comprimento',fmtLen(len)]])); const cDxfLine=coords[0]; shape.bindPopup(`<b>${layer}</b><br>${fmtLen(len)}`+_buildNavButtons(cDxfLine[0],cDxfLine[1])); }
       shape.addTo(group); count++;
     }
     if(e.type==='POLYLINE'){inPoly=true;polyVerts=[];}
@@ -1670,7 +1682,7 @@ function renderGeoJSON(data,fname,color){
       const p=f.properties||{}, name=p.name||p.Name||p.NAME||p.NOME||fname;
       const info=[['Nome',name],['Tipo',f.geometry?.type||'–']];
       Object.entries(p).slice(0,4).forEach(([k,v])=>{ if(!/^name$/i.test(k)&&v!=null) info.push([k,String(v).substring(0,40)]); });
-      layer.on('click',()=>showInfo(info)); layer.bindPopup(`<b>${name}</b>`); count++;
+      layer.on('click',()=>showInfo(info)); const cGJ=layer.getBounds?layer.getBounds().getCenter():(layer.getLatLng?layer.getLatLng():null); layer.bindPopup(`<b>${name}</b>`+(cGJ?_buildNavButtons(cGJ.lat,cGJ.lng):'')); count++;
     }
   }).addTo(group);
   return{group,count};
@@ -2018,34 +2030,60 @@ function closeSidebar() {
 // ══════════════════════════════════════════════
 // COMPARTILHAR LOCALIZAÇÃO
 // ══════════════════════════════════════════════
-let _shareLinkAtual = '';
+let _shareLinkAtual    = '';
 let _shareMarkerRecebido = null;
+let _pickModeAtivo     = false;
+let _pickMarkerPreview = null;
+
+// ── Helpers ──────────────────────────────────
+
+function _shareIcon(color) {
+  return L.divIcon({ className:'', html:`<div style="width:18px;height:18px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.5)"></div>`, iconSize:[18,18], iconAnchor:[9,9] });
+}
+
+function _buildNavButtons(lat, lon) {
+  const gm    = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+  const waze  = `https://waze.com/ul?ll=${lat},${lon}&navigate=yes`;
+  const apple = `https://maps.apple.com/?daddr=${lat},${lon}`;
+  return `
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+      <a href="${gm}"    target="_blank" style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#fff;border-radius:8px;text-decoration:none;color:#222;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.15)">🗺 Google Maps</a>
+      <a href="${waze}"  target="_blank" style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#05c8f7;border-radius:8px;text-decoration:none;color:#fff;font-size:12px;font-weight:700">🚗 Waze</a>
+      <a href="${apple}" target="_blank" style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#1c1c1e;border-radius:8px;text-decoration:none;color:#fff;font-size:12px;font-weight:700">🍎 Apple Maps</a>
+    </div>`;
+}
+
+function _abrirModalShare(lat, lon, nome, acc) {
+  const base = window.location.href.split('?')[0].split('#')[0];
+  const p = new URLSearchParams({ lat: parseFloat(lat).toFixed(7), lon: parseFloat(lon).toFixed(7) });
+  if (acc)  p.set('acc', acc);
+  if (nome) p.set('n', nome);
+  _shareLinkAtual = base + '?' + p.toString();
+
+  document.getElementById('share-link-box').value   = _shareLinkAtual;
+  document.getElementById('share-modal-title').textContent  = nome || 'Localização selecionada';
+  document.getElementById('share-modal-coords').textContent =
+    `${parseFloat(lat).toFixed(5)}, ${parseFloat(lon).toFixed(5)}` + (acc ? `  ·  ±${acc} m` : '');
+  document.getElementById('share-modal').style.display = 'flex';
+}
+
+// ── GPS ──────────────────────────────────────
 
 function gerarLinkLocalizacao() {
   if (!navigator.geolocation) { toast('GPS não suportado neste dispositivo', 'warn'); return; }
   const nome = (document.getElementById('share-name').value || '').trim();
   toast('Obtendo localização…');
   navigator.geolocation.getCurrentPosition(pos => {
-    const lat = pos.coords.latitude.toFixed(7);
-    const lon = pos.coords.longitude.toFixed(7);
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
     const acc = Math.round(pos.coords.accuracy);
-    const params = new URLSearchParams({ lat, lon, acc });
-    if (nome) params.set('n', nome);
-    const base = window.location.href.split('?')[0].split('#')[0];
-    _shareLinkAtual = base + '?' + params.toString();
-
-    document.getElementById('share-link-box').value = _shareLinkAtual;
-    document.getElementById('share-modal-title').textContent = nome ? `Localização de ${nome}` : 'Minha localização';
-    document.getElementById('share-modal-coords').textContent = `${lat}, ${lon}  ·  precisão ±${acc} m`;
-    document.getElementById('share-modal').style.display = 'flex';
-
-    map.setView([parseFloat(lat), parseFloat(lon)], 17);
-    if (gpsMarker)  map.removeLayer(gpsMarker);
-    if (gpsCircle)  map.removeLayer(gpsCircle);
-    gpsCircle = L.circle([lat, lon], { radius: acc, color:'#27ae60', fillColor:'#27ae60', fillOpacity:.12, weight:1.5 }).addTo(map);
-    gpsMarker = L.marker([lat, lon], {
-      icon: L.divIcon({ className:'', html:`<div style="width:16px;height:16px;border-radius:50%;background:#27ae60;border:3px solid #fff;box-shadow:0 2px 10px rgba(39,174,96,.7)"></div>`, iconSize:[16,16], iconAnchor:[8,8] })
-    }).addTo(map).bindPopup(`<b>${nome || 'Você está aqui'}</b><br><small>±${acc} m</small>`).openPopup();
+    if (gpsMarker) map.removeLayer(gpsMarker);
+    if (gpsCircle) map.removeLayer(gpsCircle);
+    gpsCircle = L.circle([lat, lon], { radius:acc, color:'#27ae60', fillColor:'#27ae60', fillOpacity:.12, weight:1.5 }).addTo(map);
+    gpsMarker = L.marker([lat, lon], { icon:_shareIcon('#27ae60') }).addTo(map)
+      .bindPopup(`<b>${nome || 'Você está aqui'}</b><br><small>±${acc} m</small>`).openPopup();
+    map.setView([lat, lon], 17);
+    _abrirModalShare(lat, lon, nome || 'Minha localização', acc);
     closeSidebar();
   }, err => {
     const msgs = { 1:'Permissão de GPS negada', 2:'GPS indisponível', 3:'Tempo esgotado' };
@@ -2053,12 +2091,48 @@ function gerarLinkLocalizacao() {
   }, { enableHighAccuracy:true, timeout:12000, maximumAge:0 });
 }
 
+// ── Pick no Mapa ─────────────────────────────
+
+function ativarPickNoMapa() {
+  _pickModeAtivo = true;
+  closeSidebar();
+  document.getElementById('map-wrap').classList.add('pick-mode');
+  const h = document.getElementById('pick-map-hint');
+  h.style.display = 'flex';
+  map.once('click', _onMapPickClick);
+}
+
+function _onMapPickClick(e) {
+  if (!_pickModeAtivo) return;
+  const lat  = e.latlng.lat;
+  const lon  = e.latlng.lng;
+  const nome = (document.getElementById('share-name').value || '').trim();
+
+  if (_pickMarkerPreview) map.removeLayer(_pickMarkerPreview);
+  _pickMarkerPreview = L.marker([lat, lon], { icon:_shareIcon('#2980b9') })
+    .addTo(map)
+    .bindPopup(`<b>${nome || 'Ponto selecionado'}</b><br><small>${lat.toFixed(5)}, ${lon.toFixed(5)}</small>`)
+    .openPopup();
+
+  _abrirModalShare(lat, lon, nome || 'Ponto no mapa', 0);
+  cancelarPickNoMapa();
+}
+
+function cancelarPickNoMapa() {
+  _pickModeAtivo = false;
+  document.getElementById('map-wrap').classList.remove('pick-mode');
+  document.getElementById('pick-map-hint').style.display = 'none';
+  map.off('click', _onMapPickClick);
+}
+
+// ── Modal ────────────────────────────────────
+
 function copiarLinkLocalizacao() {
   navigator.clipboard.writeText(_shareLinkAtual).then(() => {
     const btn = document.getElementById('share-copy-btn');
     btn.textContent = '✔ Copiado!';
     btn.style.background = 'var(--green)';
-    setTimeout(() => { btn.textContent = 'Copiar'; btn.style.background = 'var(--red)'; }, 2000);
+    setTimeout(() => { btn.textContent = 'Copiar'; btn.style.background = 'var(--red)'; }, 2200);
   }).catch(() => {
     document.getElementById('share-link-box').select();
     document.execCommand('copy');
@@ -2067,13 +2141,16 @@ function copiarLinkLocalizacao() {
 }
 
 function compartilharWhatsApp() {
-  const msg = encodeURIComponent('📍 Minha localização no JM MapStudio:\n' + _shareLinkAtual);
+  const nome = document.getElementById('share-modal-title').textContent;
+  const msg  = encodeURIComponent(`📍 ${nome}\nVeja no JM MapStudio:\n${_shareLinkAtual}`);
   window.open('https://wa.me/?text=' + msg, '_blank');
 }
 
 function fecharShareModal() {
   document.getElementById('share-modal').style.display = 'none';
 }
+
+// ── Link recebido ─────────────────────────────
 
 function verificarLinkCompartilhado() {
   const params = new URLSearchParams(window.location.search);
@@ -2087,42 +2164,28 @@ function verificarLinkCompartilhado() {
     map.setView([lat, lon], 17);
     if (_shareMarkerRecebido) map.removeLayer(_shareMarkerRecebido);
     if (acc > 0) L.circle([lat, lon], { radius:acc, color:'#e67e22', fillColor:'#e67e22', fillOpacity:.12, weight:1.5 }).addTo(map);
-    _shareMarkerRecebido = L.marker([lat, lon], {
-      icon: L.divIcon({ className:'', html:`<div style="width:20px;height:20px;border-radius:50%;background:#e67e22;border:3px solid #fff;box-shadow:0 2px 12px rgba(230,126,34,.8)"></div>`, iconSize:[20,20], iconAnchor:[10,10] })
-    }).addTo(map).openPopup();
+    _shareMarkerRecebido = L.marker([lat, lon], { icon:_shareIcon('#e67e22') }).addTo(map);
 
-    // Card de navegação flutuante
-    const gmUrl    = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
-    const wazeUrl  = `https://waze.com/ul?ll=${lat},${lon}&navigate=yes`;
-    const appleUrl = `https://maps.apple.com/?daddr=${lat},${lon}`;
+    const old = document.getElementById('nav-card');
+    if (old) old.remove();
     const card = document.createElement('div');
     card.id = 'nav-card';
+    card.style.cssText = 'position:absolute;bottom:54px;left:50%;transform:translateX(-50%);z-index:2000;background:var(--panel);border:1px solid var(--border2);border-radius:14px;padding:16px 16px 12px;width:min(92vw,300px);box-shadow:0 8px 40px rgba(0,0,0,.85);';
     card.innerHTML = `
-      <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:2px">📍 ${nome}</div>
-      ${acc ? `<div style="font-size:10px;color:var(--sub);margin-bottom:10px">Precisão: ±${acc} m &nbsp;·&nbsp; ${lat.toFixed(5)}, ${lon.toFixed(5)}</div>` : `<div style="font-size:10px;color:var(--sub);margin-bottom:10px">${lat.toFixed(5)}, ${lon.toFixed(5)}</div>`}
-      <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:7px">Abrir rota em:</div>
-      <div style="display:flex;flex-direction:column;gap:7px">
-        <a href="${gmUrl}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;border-radius:9px;text-decoration:none;color:#222;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.15)">
-          <img src="https://maps.gstatic.com/tactile/pane/secure_connection-2x.png" style="width:22px;height:22px;border-radius:4px" onerror="this.style.display='none'">
-          <span style="font-size:18px;margin-right:2px">🗺</span> Google Maps
-        </a>
-        <a href="${wazeUrl}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#05c8f7;border-radius:9px;text-decoration:none;color:#fff;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.15)">
-          <span style="font-size:18px">🚗</span> Waze
-        </a>
-        <a href="${appleUrl}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#000;border-radius:9px;text-decoration:none;color:#fff;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.15)">
-          <span style="font-size:18px">🍎</span> Apple Maps
-        </a>
-      </div>
-      <button onclick="this.parentElement.remove()" style="margin-top:10px;width:100%;padding:8px;background:transparent;border:1px solid var(--border2);border-radius:8px;color:var(--sub);font-size:11px;cursor:pointer">Fechar</button>
-    `;
-    card.style.cssText = `
-      position:absolute;bottom:50px;left:50%;transform:translateX(-50%);
-      z-index:2000;background:var(--panel);border:1px solid var(--border2);
-      border-radius:14px;padding:16px;width:min(92vw,320px);
-      box-shadow:0 8px 40px rgba(0,0,0,.8);
+      <div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px">📍 ${nome}</div>
+      <div style="font-size:10px;color:var(--sub);margin-bottom:4px">${lat.toFixed(5)}, ${lon.toFixed(5)}${acc ? ` · ±${acc} m` : ''}</div>
+      <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:2px">Traçar rota:</div>
+      ${_buildNavButtons(lat, lon)}
+      <button onclick="document.getElementById('nav-card').remove()" style="margin-top:10px;width:100%;padding:8px;background:transparent;border:1px solid var(--border2);border-radius:8px;color:var(--sub);font-size:11px;cursor:pointer">Fechar</button>
     `;
     document.getElementById('map-wrap').appendChild(card);
   }, 1500);
+}
+
+// ── Popup de qualquer ponto do mapa ──────────
+function popupComRota(lat, lon, titulo, extra) {
+  const nav = _buildNavButtons(lat, lon);
+  return `<b>${titulo}</b>${extra ? `<br><small>${extra}</small>` : ''}${nav}`;
 }
 
 // ══════════════════════════════════════════════
