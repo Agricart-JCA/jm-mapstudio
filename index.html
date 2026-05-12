@@ -764,9 +764,6 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       <button class="draw-btn" id="btn-kml"   onclick="exportAllDrawn('kml')"     disabled>⬇ KML</button>
       <button class="draw-btn danger" id="btn-clear" onclick="clearAllDrawn()"    disabled>🗑 Limpar</button>
     </div>
-    <div class="draw-btns" style="margin-top:6px">
-      <button class="draw-btn" id="btn-touch-draw" onclick="startTouchDraw()" style="flex:1;border-color:var(--amber);color:var(--amber)">👆 Desenhar Touch</button>
-    </div>
   </div>
 
   <!-- ── EDIT PANEL ── -->
@@ -910,6 +907,13 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       </button>
     </div>
   </div>
+  <!-- menu touch -->
+  <div id="touch-menu" style="display:none;position:absolute;z-index:3000;background:var(--panel);border:1px solid var(--border2);border-radius:12px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.8);flex-direction:column;gap:4px;min-width:180px;">
+    <button onclick="touchMenuDesenhar()" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:transparent;border:none;border-radius:8px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;width:100%;text-align:left;" onmouseover="this.style.background='var(--card2)'" onmouseout="this.style.background='transparent'">✏️ Desenhar aqui</button>
+    <button onclick="touchMenuCompartilhar()" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:transparent;border:none;border-radius:8px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;width:100%;text-align:left;" onmouseover="this.style.background='var(--card2)'" onmouseout="this.style.background='transparent'">📤 Compartilhar local</button>
+    <button onclick="fecharTouchMenu()" style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:transparent;border:none;border-radius:8px;color:var(--sub);font-size:12px;cursor:pointer;width:100%;text-align:left;" onmouseover="this.style.background='var(--card2)'" onmouseout="this.style.background='transparent'">✕ Cancelar</button>
+  </div>
+
   <div id="pick-map-hint" style="display:none;position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:2000;background:rgba(41,128,185,.95);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;font-weight:700;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.5);display:none;align-items:center;gap:10px;">
     <span>🗺 Toque em qualquer ponto do mapa</span>
     <button onclick="cancelarPickNoMapa()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:3px 10px;font-size:12px;cursor:pointer;font-weight:700">✕ Cancelar</button>
@@ -1256,6 +1260,7 @@ document.getElementById('otp-input').addEventListener('input',    e=>{ e.target.
 // Inicializa auth
 initAuth();
 verificarLinkCompartilhado();
+_initTouchMenu();
 
 // ══════════════════════════════════════════════
 // MAP
@@ -2189,6 +2194,58 @@ function popupComRota(lat, lon, titulo, extra) {
 }
 
 // ══════════════════════════════════════════════
+// TOUCH MENU — aparece ao tocar no mapa (mobile)
+// ══════════════════════════════════════════════
+let _touchMenuLatLng = null;
+
+function _isTouchDevice() { return ('ontouchstart' in window) || navigator.maxTouchPoints > 0; }
+
+function _initTouchMenu() {
+  if (!_isTouchDevice()) return;
+  // Toque simples em área vazia do mapa abre o menu
+  map.on('click', function(e) {
+    if (touchDrawActive || _pickModeAtivo) return;
+    _touchMenuLatLng = e.latlng;
+    _mostrarTouchMenu(e.originalEvent);
+  });
+}
+
+function _mostrarTouchMenu(evt) {
+  const menu = document.getElementById('touch-menu');
+  const wrap  = document.getElementById('map-wrap').getBoundingClientRect();
+  let x = (evt.touches ? evt.touches[0].clientX : evt.clientX) - wrap.left;
+  let y = (evt.touches ? evt.touches[0].clientY : evt.clientY) - wrap.top;
+  // Garante que não sai da tela
+  x = Math.min(x, wrap.width  - 200);
+  y = Math.min(y, wrap.height - 150);
+  menu.style.left    = x + 'px';
+  menu.style.top     = y + 'px';
+  menu.style.display = 'flex';
+}
+
+function fecharTouchMenu() {
+  document.getElementById('touch-menu').style.display = 'none';
+  _touchMenuLatLng = null;
+}
+
+function touchMenuDesenhar() {
+  fecharTouchMenu();
+  startTouchDraw();
+}
+
+function touchMenuCompartilhar() {
+  fecharTouchMenu();
+  if (!_touchMenuLatLng) return;
+  const nome = '';
+  _abrirModalShare(_touchMenuLatLng.lat, _touchMenuLatLng.lng, 'Ponto no mapa', 0);
+  if (_pickMarkerPreview) map.removeLayer(_pickMarkerPreview);
+  _pickMarkerPreview = L.marker([_touchMenuLatLng.lat, _touchMenuLatLng.lng], { icon: _shareIcon('#2980b9') })
+    .addTo(map)
+    .bindPopup(`<b>Ponto selecionado</b><br><small>${_touchMenuLatLng.lat.toFixed(5)}, ${_touchMenuLatLng.lng.toFixed(5)}</small>`)
+    .openPopup();
+}
+
+// ══════════════════════════════════════════════
 // TOUCH DRAWING
 // ══════════════════════════════════════════════
 let touchDrawActive  = false;
@@ -2198,18 +2255,11 @@ let touchDrawDotLayer = null;
 
 function startTouchDraw() {
   if (touchDrawActive) { cancelTouchDraw(); return; }
-  closeSidebar();
   touchDrawActive = true;
   touchDrawPoints = [];
   map.dragging.disable();
   map.touchZoom.disable();
   map.doubleClickZoom.disable();
-
-  const btn = document.getElementById('btn-touch-draw');
-  btn.style.borderColor = '#e74c3c';
-  btn.style.color = '#e74c3c';
-  btn.style.background = 'rgba(192,57,43,.18)';
-  btn.textContent = '✕ Cancelar Touch';
 
   document.getElementById('touch-draw-hint').style.display = 'block';
   document.getElementById('touch-draw-bar').style.display  = 'flex';
@@ -2305,12 +2355,6 @@ function resetTouchDraw() {
   canvas.removeEventListener('touchstart', onTouchStart);
   canvas.removeEventListener('touchmove',  onTouchMove);
   canvas.removeEventListener('touchend',   onTouchEnd);
-
-  const btn = document.getElementById('btn-touch-draw');
-  btn.style.borderColor = '';
-  btn.style.color = '';
-  btn.style.background = '';
-  btn.textContent = '👆 Desenhar Touch';
 
   document.getElementById('touch-draw-hint').style.display = 'none';
   document.getElementById('touch-draw-bar').style.display  = 'none';
