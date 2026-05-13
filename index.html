@@ -1335,8 +1335,7 @@ async function startCheckout(plan) {
   errEl.textContent='Redirecionando para o pagamento...';
   try {
     const sess = getSession();
-    const headers = {'Content-Type':'application/json'};
-    if (sess?.access_token) headers['Authorization']='Bearer '+sess.access_token;
+    const headers = {'Content-Type':'application/json', 'Authorization':'Bearer '+(sess?.access_token||SUPABASE_ANON_KEY)};
     const res  = await fetch(CHECKOUT_FN_URL,{method:'POST',headers,body:JSON.stringify({
       priceId,
       successUrl: window.location.origin+window.location.pathname+'?checkout=success',
