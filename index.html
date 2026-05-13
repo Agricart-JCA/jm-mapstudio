@@ -1237,9 +1237,13 @@ async function applySession(token) {
   const user = await sbGet('/auth/v1/user', token);
   if (!user?.id) { clearSession(); return; }
 
+  const ADMIN_EMAILS = ['juancarlos.agricart@gmail.com'];
+  const isOwner = ADMIN_EMAILS.includes((user.email||'').toLowerCase());
+
   const profiles = await sbGet(`/rest/v1/profiles?id=eq.${user.id}&select=name,role`, token);
-  if (!profiles?.length) { showSubscriptionRequired(); return; }
-  const profile = profiles[0];
+  const profile = (profiles?.length) ? profiles[0] : { name: user.email.split('@')[0], role: 'operador' };
+
+  if (isOwner) profile.role = 'admin';
 
   if (profile.role !== 'admin') {
     const subs = await sbGet(`/rest/v1/subscriptions?user_id=eq.${user.id}&status=in.(active,trialing)&limit=1`, token);
