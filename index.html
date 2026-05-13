@@ -725,6 +725,28 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       </div>
     </div>
 
+    <!-- ─ PASSO 3: Definir senha (recovery) ─ -->
+    <div id="step-reset" style="width:100%;display:none">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:22px;margin-bottom:8px">🔐</div>
+        <div style="font-size:14px;font-weight:700;color:var(--text)">Defina sua senha</div>
+        <div style="font-size:11px;color:var(--sub);margin-top:4px">Escolha uma senha para acessar o sistema</div>
+      </div>
+      <div class="lf-grp">
+        <label class="lf-lbl">Nova senha</label>
+        <div style="position:relative">
+          <input class="lf-inp" type="password" id="reset-pass" placeholder="Mínimo 6 caracteres" style="padding-right:40px">
+          <button type="button" onclick="toggleResetSenha()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--sub);padding:0" id="btn-toggle-reset">👁</button>
+        </div>
+      </div>
+      <div class="lf-grp">
+        <label class="lf-lbl">Confirmar senha</label>
+        <input class="lf-inp" type="password" id="reset-pass2" placeholder="Repita a senha">
+      </div>
+      <div id="reset-err" style="font-size:12px;color:#e74c3c;min-height:18px;margin-bottom:8px;text-align:center;font-weight:600;padding:6px 0"></div>
+      <button class="lf-sub-btn" onclick="doResetPassword()">Salvar senha e entrar</button>
+    </div>
+
     <!-- ─ PASSO 2: Escolha seu plano ─ -->
     <div id="step-pricing" style="width:100%;display:none">
       <div style="text-align:center;margin-bottom:16px">
@@ -1229,8 +1251,54 @@ async function initAuth() {
   }
   document.getElementById('price-mensal-val').textContent = PRECO_MENSAL;
   document.getElementById('price-anual-val').textContent  = PRECO_ANUAL;
+
+  // Detectar link de redefinição de senha (recovery)
+  const hash = new URLSearchParams(window.location.hash.replace('#',''));
+  if (hash.get('type') === 'recovery' && hash.get('access_token')) {
+    window._recoveryToken = hash.get('access_token');
+    window.history.replaceState({}, '', window.location.pathname);
+    document.getElementById('step-login').style.display = 'none';
+    document.getElementById('step-reset').style.display = 'block';
+    return;
+  }
+
   const sess = getSession();
   if (sess?.access_token) await applySession(sess.access_token);
+}
+
+async function doResetPassword() {
+  const pass  = document.getElementById('reset-pass').value;
+  const pass2 = document.getElementById('reset-pass2').value;
+  const errEl = document.getElementById('reset-err');
+  errEl.textContent = '';
+  if (pass.length < 6)        { errEl.textContent = 'Senha deve ter pelo menos 6 caracteres.'; return; }
+  if (pass !== pass2)         { errEl.textContent = 'As senhas não coincidem.'; return; }
+  if (!window._recoveryToken) { errEl.textContent = 'Link inválido ou expirado. Solicite um novo.'; return; }
+  const btn = document.querySelector('#step-reset .lf-sub-btn');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    const resp = await fetch(SUPABASE_URL + '/auth/v1/user', {
+      method: 'PUT',
+      headers: sbH(window._recoveryToken),
+      body: JSON.stringify({ password: pass })
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      setSession({ access_token: window._recoveryToken });
+      toast('Senha definida! Entrando no sistema...', 'ok', 3000);
+      setTimeout(() => applySession(window._recoveryToken), 1500);
+    } else {
+      errEl.textContent = data.message || data.msg || 'Erro ao salvar senha.';
+    }
+  } catch(e) { errEl.textContent = 'Erro de conexão. Tente novamente.'; }
+  finally { btn.disabled = false; btn.textContent = 'Salvar senha e entrar'; }
+}
+
+function toggleResetSenha() {
+  const inp = document.getElementById('reset-pass');
+  const btn = document.getElementById('btn-toggle-reset');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? '👁' : '🙈';
 }
 
 async function applySession(token) {
