@@ -1215,8 +1215,6 @@ async function sbPatch(path, body, token) {
 function getSession() { try { return JSON.parse(sessionStorage.getItem(SESS_KEY)); } catch { return null; } }
 function setSession(s) { sessionStorage.setItem(SESS_KEY, JSON.stringify(s)); }
 function clearSession() { sessionStorage.removeItem(SESS_KEY); }
-const ROLE_LABELS = { admin:'Administrador', operador:'Operador', visualizador:'Visualizador' };
-const ROLE_COLORS = { admin:'#c0392b', operador:'#2980b9', visualizador:'#27ae60' };
 
 // ── initAuth ──────────────────────────────────
 async function initAuth() {
