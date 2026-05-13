@@ -1168,7 +1168,6 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
@@ -1178,7 +1177,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 <script>
 
 // ══════════════════════════════════════════════
-// SUPABASE + STRIPE — Configuração
+// SUPABASE + STRIPE — Configuração (REST direto)
 // ══════════════════════════════════════════════
 const SUPABASE_URL      = 'https://zzjizqiafnnuqmrkhjqj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6aml6cWlhZm5udXFtcmtoanFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2Nzk3NDMsImV4cCI6MjA5NDI1NTc0M30.D0vhrJY2qgLJdqI8T75dgPer_376ICDOlvSoQVSoovk';
@@ -1191,63 +1190,67 @@ const PRECO_ANUAL  = 'R$ 29,90';
 const CHECKOUT_FN_URL = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/create-checkout';
 const INVITE_FN_URL   = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/invite-user';
 
-const { createClient } = supabase;
-const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-const ROLE_LABELS = { admin:'Administrador', operador:'Operador', visualizador:'Visualizador' };
-const ROLE_COLORS = { admin:'#c0392b', operador:'#2980b9', visualizador:'#27ae60' };
 const ROLE_LABELS = { admin:'Administrador', operador:'Operador', visualizador:'Visualizador' };
 const ROLE_COLORS = { admin:'#c0392b', operador:'#2980b9', visualizador:'#27ae60' };
 
-// ── Inicialização ──────────────────────────────
+// ── Helpers REST ───────────────────────────────
+const SESS_KEY = 'jmms_sb';
+function sbH(token) {
+  const h = { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' };
+  if (token) h['Authorization'] = 'Bearer ' + token;
+  return h;
+}
+async function sbGet(path, token) {
+  try { return await (await fetch(SUPABASE_URL + path, { headers: sbH(token) })).json(); }
+  catch { return null; }
+}
+async function sbPost(path, body, token) {
+  try { return await (await fetch(SUPABASE_URL + path, { method:'POST', headers:sbH(token), body:JSON.stringify(body) })).json(); }
+  catch { return null; }
+}
+async function sbPatch(path, body, token) {
+  try { return (await fetch(SUPABASE_URL + path, { method:'PATCH', headers:{...sbH(token),'Prefer':'return=minimal'}, body:JSON.stringify(body) })).status; }
+  catch { return 500; }
+}
+function getSession() { try { return JSON.parse(sessionStorage.getItem(SESS_KEY)); } catch { return null; } }
+function setSession(s) { sessionStorage.setItem(SESS_KEY, JSON.stringify(s)); }
+function clearSession() { sessionStorage.removeItem(SESS_KEY); }
+const ROLE_LABELS = { admin:'Administrador', operador:'Operador', visualizador:'Visualizador' };
+const ROLE_COLORS = { admin:'#c0392b', operador:'#2980b9', visualizador:'#27ae60' };
+
+// ── initAuth ──────────────────────────────────
 async function initAuth() {
   const params = new URLSearchParams(window.location.search);
-
   if (params.get('checkout') === 'success') {
-    toast('Assinatura ativada! Faça login para acessar o sistema.', 'ok', 7000);
+    toast('Assinatura ativada! Faça login para acessar.', 'ok', 7000);
     window.history.replaceState({}, '', window.location.pathname);
   }
-
   if (params.get('lat') && params.get('lon')) {
     entrarComoVisitante(params.get('n') || 'Visitante');
     return;
   }
-
   document.getElementById('price-mensal-val').textContent = PRECO_MENSAL;
   document.getElementById('price-anual-val').textContent  = PRECO_ANUAL;
-
-  const { data: { session } } = await db.auth.getSession();
-  if (session) await applySession(session);
-
-  db.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session) await applySession(session);
-    else if (event === 'SIGNED_OUT') location.reload();
-  });
+  const sess = getSession();
+  if (sess?.access_token) await applySession(sess.access_token);
 }
 
-async function applySession(session) {
-  const { data: profile, error } = await db
-    .from('profiles')
-    .select('name, role')
-    .eq('id', session.user.id)
-    .single();
+async function applySession(token) {
+  const user = await sbGet('/auth/v1/user', token);
+  if (!user?.id) { clearSession(); return; }
 
-  if (error || !profile) { showSubscriptionRequired(); return; }
+  const profiles = await sbGet(`/rest/v1/profiles?id=eq.${user.id}&select=name,role`, token);
+  if (!profiles?.length) { showSubscriptionRequired(); return; }
+  const profile = profiles[0];
 
   if (profile.role !== 'admin') {
-    const { data: sub } = await db
-      .from('subscriptions')
-      .select('status')
-      .eq('user_id', session.user.id)
-      .in('status', ['active', 'trialing'])
-      .maybeSingle();
-    if (!sub) { showSubscriptionRequired(); return; }
+    const subs = await sbGet(`/rest/v1/subscriptions?user_id=eq.${user.id}&status=in.(active,trialing)&limit=1`, token);
+    if (!subs?.length) { showSubscriptionRequired(); return; }
   }
 
   document.getElementById('login-overlay').classList.add('gone');
   document.getElementById('sub-required-overlay').classList.remove('show');
-
-  const initials = profile.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  const initials = profile.name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
   document.getElementById('user-avatar').textContent = initials;
   document.getElementById('user-avatar').style.background = ROLE_COLORS[profile.role] || 'var(--red)';
   document.getElementById('user-display-name').textContent = profile.name;
@@ -1262,29 +1265,24 @@ function showSubscriptionRequired() {
   document.getElementById('login-overlay').classList.add('gone');
   document.getElementById('sub-required-overlay').classList.add('show');
 }
-
 function showLoginOverlayWithPricing() {
   document.getElementById('sub-required-overlay').classList.remove('show');
   document.getElementById('login-overlay').classList.remove('gone');
   showPricingStep();
 }
-
 function entrarComoVisitante(nome) {
   document.getElementById('login-overlay').classList.add('gone');
   document.getElementById('user-avatar').textContent = '👁';
   document.getElementById('user-avatar').style.background = '#5d6d7e';
   document.getElementById('user-display-name').textContent = 'Visitante';
   const rl = document.getElementById('user-role-lbl');
-  rl.textContent = 'Acesso via link';
-  rl.className = '';
-  rl.style.color = 'var(--sub)';
+  rl.textContent = 'Acesso via link'; rl.className = ''; rl.style.color = 'var(--sub)';
   applyRoleRestrictions('visualizador');
 }
-
 function applyRoleRestrictions(role) {
   if (role === 'visualizador') {
-    document.querySelectorAll('.draw-btn').forEach(b => { b.disabled = true; b.title = 'Seu perfil não permite desenhar'; });
-    document.querySelectorAll('.measure-btn').forEach(b => b.disabled = true);
+    document.querySelectorAll('.draw-btn').forEach(b => { b.disabled=true; b.title='Seu perfil não permite desenhar'; });
+    document.querySelectorAll('.measure-btn').forEach(b => b.disabled=true);
     const dc = document.querySelector('.leaflet-draw-toolbar');
     if (dc) dc.style.display = 'none';
   }
@@ -1292,139 +1290,122 @@ function applyRoleRestrictions(role) {
 
 // ── Login / Logout ─────────────────────────────
 async function doLogin() {
-  const email    = (document.getElementById('li-user').value || '').trim().toLowerCase();
-  const password = document.getElementById('li-pass').value || '';
+  const email    = (document.getElementById('li-user').value||'').trim().toLowerCase();
+  const password = document.getElementById('li-pass').value||'';
   const errEl    = document.getElementById('login-err');
   errEl.textContent = '';
-  if (!email || !password) { errEl.textContent = 'Preencha e-mail e senha.'; return; }
+  if (!email||!password) { errEl.textContent='Preencha e-mail e senha.'; return; }
   const btn = document.getElementById('login-btn');
-  btn.disabled = true; btn.textContent = 'Verificando...';
+  btn.disabled=true; btn.textContent='Verificando...';
   try {
-    const { error } = await db.auth.signInWithPassword({ email, password });
-    if (error) errEl.textContent = error.message.includes('Invalid') ? 'E-mail ou senha incorretos.' : 'Erro ao entrar. Tente novamente.';
-  } catch(e) { errEl.textContent = 'Erro ao autenticar. Tente novamente.'; }
-  finally { btn.disabled = false; btn.textContent = 'Entrar no sistema'; }
+    const data = await sbPost('/auth/v1/token?grant_type=password', {email, password});
+    if (data?.access_token) {
+      setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
+      await applySession(data.access_token);
+    } else {
+      const msg = data?.error_description || data?.msg || '';
+      errEl.textContent = msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('credential')
+        ? 'E-mail ou senha incorretos.' : 'Erro ao entrar. Tente novamente.';
+    }
+  } catch(e) { errEl.textContent='Erro de conexão. Tente novamente.'; }
+  finally { btn.disabled=false; btn.textContent='Entrar no sistema'; }
 }
 
 async function doLogout() {
-  await db.auth.signOut();
-  location.reload();
+  const sess = getSession();
+  if (sess?.access_token) await fetch(SUPABASE_URL+'/auth/v1/logout',{method:'POST',headers:sbH(sess.access_token)}).catch(()=>{});
+  clearSession(); location.reload();
 }
 
 // ── Planos / Checkout ──────────────────────────
 function showLoginStep() {
-  document.getElementById('step-login').style.display   = 'block';
-  document.getElementById('step-pricing').style.display = 'none';
+  document.getElementById('step-login').style.display='block';
+  document.getElementById('step-pricing').style.display='none';
 }
-
 function showPricingStep() {
-  document.getElementById('step-login').style.display   = 'none';
-  document.getElementById('step-pricing').style.display = 'block';
-  document.getElementById('pricing-err').textContent    = '';
+  document.getElementById('step-login').style.display='none';
+  document.getElementById('step-pricing').style.display='block';
+  document.getElementById('pricing-err').textContent='';
 }
-
 async function startCheckout(plan) {
-  const priceId = plan === 'anual' ? STRIPE_PRICE_ANUAL : STRIPE_PRICE_MENSAL;
+  const priceId = plan==='anual' ? STRIPE_PRICE_ANUAL : STRIPE_PRICE_MENSAL;
   const errEl   = document.getElementById('pricing-err');
-  errEl.textContent = 'Redirecionando para o pagamento...';
+  errEl.textContent='Redirecionando para o pagamento...';
   try {
-    const { data: { session } } = await db.auth.getSession();
-    const headers = { 'Content-Type': 'application/json' };
-    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
-    const res  = await fetch(CHECKOUT_FN_URL, {
-      method: 'POST', headers,
-      body: JSON.stringify({
-        priceId,
-        successUrl: window.location.origin + window.location.pathname + '?checkout=success',
-        cancelUrl:  window.location.origin + window.location.pathname + '?checkout=cancel',
-      })
-    });
+    const sess = getSession();
+    const headers = {'Content-Type':'application/json'};
+    if (sess?.access_token) headers['Authorization']='Bearer '+sess.access_token;
+    const res  = await fetch(CHECKOUT_FN_URL,{method:'POST',headers,body:JSON.stringify({
+      priceId,
+      successUrl: window.location.origin+window.location.pathname+'?checkout=success',
+      cancelUrl:  window.location.origin+window.location.pathname+'?checkout=cancel'
+    })});
     const data = await res.json();
-    if (data.url) window.location.href = data.url;
-    else errEl.textContent = 'Erro ao iniciar checkout. Tente novamente.';
-  } catch(e) { errEl.textContent = 'Erro de conexão. Tente novamente.'; }
+    if (data.url) window.location.href=data.url;
+    else errEl.textContent='Erro ao iniciar checkout. Tente novamente.';
+  } catch(e) { errEl.textContent='Erro de conexão. Tente novamente.'; }
 }
 
 // ── Admin panel ────────────────────────────────
-function openAdminPanel() {
-  renderAdminUsers();
-  document.getElementById('admin-overlay').classList.add('open');
-}
-function closeAdminPanel() {
-  document.getElementById('admin-overlay').classList.remove('open');
-}
+function openAdminPanel() { renderAdminUsers(); document.getElementById('admin-overlay').classList.add('open'); }
+function closeAdminPanel() { document.getElementById('admin-overlay').classList.remove('open'); }
 
 async function renderAdminUsers() {
   const el = document.getElementById('admin-user-list');
-  el.innerHTML = '<div style="font-size:11px;color:var(--sub);padding:8px 0">Carregando...</div>';
-  const { data: profiles, error } = await db
-    .from('profiles')
-    .select('id, name, role, stripe_customer_id')
-    .order('created_at', { ascending: false });
-  if (error || !profiles?.length) { el.innerHTML = '<div class="empty-state">Nenhum usuário</div>'; return; }
+  el.innerHTML='<div style="font-size:11px;color:var(--sub);padding:8px 0">Carregando...</div>';
+  const sess = getSession();
+  const profiles = await sbGet('/rest/v1/profiles?select=id,name,role,stripe_customer_id&order=created_at.desc', sess?.access_token);
+  if (!profiles?.length) { el.innerHTML='<div class="empty-state">Nenhum usuário</div>'; return; }
   el.innerHTML = profiles.map(u => {
-    const initials = u.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    const i = u.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
     return `<div class="adm-user-card">
-      <div class="auc-av" style="background:${ROLE_COLORS[u.role]||'#555'}">${initials}</div>
+      <div class="auc-av" style="background:${ROLE_COLORS[u.role]||'#555'}">${i}</div>
       <div class="auc-info">
         <div class="auc-name">${u.name}</div>
-        <div class="auc-user">${u.stripe_customer_id ? '💳 assinante' : '○ sem assinatura'}</div>
+        <div class="auc-user">${u.stripe_customer_id?'💳 assinante':'○ sem assinatura'}</div>
       </div>
       <select class="adm-sel" style="font-size:10px;padding:4px 6px" onchange="changeRole('${u.id}',this.value)">
-        <option value="operador"     ${u.role==='operador'    ?'selected':''}>Operador</option>
+        <option value="operador"     ${u.role==='operador'?'selected':''}>Operador</option>
         <option value="visualizador" ${u.role==='visualizador'?'selected':''}>Visualizador</option>
-        <option value="admin"        ${u.role==='admin'       ?'selected':''}>Admin</option>
+        <option value="admin"        ${u.role==='admin'?'selected':''}>Admin</option>
       </select>
     </div>`;
   }).join('');
 }
-
 async function changeRole(userId, newRole) {
-  const { error } = await db.from('profiles').update({ role: newRole }).eq('id', userId);
-  if (error) toast('Erro ao alterar perfil.', 'err');
-  else toast('Perfil atualizado.', 'ok');
+  const sess = getSession();
+  const s = await sbPatch(`/rest/v1/profiles?id=eq.${userId}`, {role:newRole}, sess?.access_token);
+  s < 300 ? toast('Perfil atualizado.','ok') : toast('Erro ao alterar perfil.','err');
 }
-
 async function inviteUser() {
   const name  = document.getElementById('new-name').value.trim();
   const email = document.getElementById('new-user').value.trim().toLowerCase();
   const role  = document.getElementById('new-role').value;
   const msg   = document.getElementById('adm-msg');
-  msg.textContent = ''; msg.className = 'adm-msg';
-  if (!name || !email) { msg.textContent = 'Preencha nome e e-mail.'; msg.className = 'adm-msg err'; return; }
-  if (!/\S+@\S+\.\S+/.test(email)) { msg.textContent = 'E-mail inválido.'; msg.className = 'adm-msg err'; return; }
-  msg.textContent = 'Enviando convite...';
+  msg.textContent=''; msg.className='adm-msg';
+  if (!name||!email) { msg.textContent='Preencha nome e e-mail.'; msg.className='adm-msg err'; return; }
+  if (!/\S+@\S+\.\S+/.test(email)) { msg.textContent='E-mail inválido.'; msg.className='adm-msg err'; return; }
+  msg.textContent='Enviando convite...';
   try {
-    const { data: { session } } = await db.auth.getSession();
-    const res = await fetch(INVITE_FN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ email, name, role })
-    });
+    const sess = getSession();
+    const res = await fetch(INVITE_FN_URL,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+sess?.access_token},body:JSON.stringify({email,name,role})});
     const data = await res.json();
     if (res.ok) {
-      msg.textContent = `Convite enviado para ${email}.`; msg.className = 'adm-msg ok';
-      document.getElementById('new-name').value = '';
-      document.getElementById('new-user').value = '';
+      msg.textContent=`Convite enviado para ${email}.`; msg.className='adm-msg ok';
+      document.getElementById('new-name').value=''; document.getElementById('new-user').value='';
       renderAdminUsers();
-    } else {
-      msg.textContent = data.error || 'Erro ao enviar convite.'; msg.className = 'adm-msg err';
-    }
-  } catch(e) { msg.textContent = 'Erro de conexão.'; msg.className = 'adm-msg err'; }
+    } else { msg.textContent=data.error||'Erro ao enviar convite.'; msg.className='adm-msg err'; }
+  } catch(e) { msg.textContent='Erro de conexão.'; msg.className='adm-msg err'; }
 }
-
 function toggleSenha() {
-  const inp = document.getElementById('li-pass');
-  const btn = document.getElementById('btn-toggle-senha');
-  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
-  else { inp.type = 'password'; btn.textContent = '👁'; }
+  const inp=document.getElementById('li-pass'), btn=document.getElementById('btn-toggle-senha');
+  inp.type=inp.type==='password'?'text':'password'; btn.textContent=inp.type==='password'?'👁':'🙈';
 }
 
 // ── Teclado ────────────────────────────────────
-document.getElementById('li-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
-document.getElementById('li-user').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('li-pass').focus(); });
+document.getElementById('li-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+document.getElementById('li-user').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('li-pass').focus(); });
 
-// Inicializa auth
 initAuth();
 verificarLinkCompartilhado();
 
