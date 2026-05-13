@@ -355,6 +355,33 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 #login-btn:hover { background:linear-gradient(135deg,#e74c3c 0%,#c0392b 100%); box-shadow:0 6px 28px rgba(192,57,43,.55); transform:translateY(-1px); }
 #login-btn:disabled { opacity:.6; cursor:default; transform:none; }
 #login-footer { margin-top:22px; font-size:10px; color:var(--dim); text-align:center; line-height:1.8; }
+.price-card {
+  border:1.5px solid var(--border2); border-radius:10px; padding:14px 16px;
+  cursor:pointer; transition:all .18s; background:var(--card);
+}
+.price-card:hover { border-color:var(--red); background:var(--red-a); transform:translateY(-1px); }
+/* ─ Subscription required overlay ─ */
+#sub-required-overlay {
+  display:none; position:fixed; inset:0; z-index:9998;
+  background:rgba(12,17,23,.97); backdrop-filter:blur(6px);
+  align-items:center; justify-content:center;
+}
+#sub-required-overlay.show { display:flex; }
+#sub-required-card {
+  background:var(--panel); border:1px solid var(--border2); border-radius:16px;
+  padding:36px 32px; max-width:380px; width:90%; text-align:center;
+}
+#sub-required-card .sr-icon { font-size:48px; margin-bottom:16px; }
+#sub-required-card h2 { font-size:18px; font-weight:800; color:var(--text); margin-bottom:8px; }
+#sub-required-card p  { font-size:12px; color:var(--sub); line-height:1.7; margin-bottom:24px; }
+.sr-btn {
+  display:block; width:100%; padding:13px; border:none; border-radius:8px;
+  font-size:13px; font-weight:700; cursor:pointer; margin-bottom:10px;
+  font-family:var(--font); transition:opacity .15s;
+}
+.sr-btn:hover { opacity:.88; }
+.sr-btn-primary { background:var(--red); color:#fff; }
+.sr-btn-ghost   { background:var(--card2); color:var(--sub); }
 #login-footer strong { color:var(--sub); }
 
 /* ═══ USER BAR ═══ */
@@ -676,8 +703,8 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     <!-- ─ PASSO 1: Login ─ -->
     <div id="step-login" style="width:100%">
       <div class="lf-grp">
-        <label class="lf-lbl" for="li-user">Usuário</label>
-        <input class="lf-inp" type="text" id="li-user" placeholder="seu.usuario" autocomplete="username">
+        <label class="lf-lbl" for="li-user">E-mail</label>
+        <input class="lf-inp" type="email" id="li-user" placeholder="seu@email.com" autocomplete="email">
       </div>
       <div class="lf-grp">
         <label class="lf-lbl" for="li-pass">Senha</label>
@@ -685,9 +712,8 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       </div>
       <div id="login-err" class="lf-msg-err"></div>
       <button id="login-btn" class="lf-sub-btn" onclick="doLogin()">Entrar no sistema</button>
-      <p style="margin-top:10px;text-align:center;font-size:10px;color:#4a5a6b;letter-spacing:.3px;">Versão Beta &middot; Dados armazenados localmente neste dispositivo</p>
       <p style="margin-top:14px;text-align:center;font-size:11px;color:var(--sub)">
-        Sem acesso? <a href="#" class="lf-action-link" id="link-register" onclick="event.preventDefault();showRegStep()">Criar conta</a>
+        Sem acesso? <a href="#" class="lf-action-link" id="link-register" onclick="event.preventDefault();showPricingStep()">Assinar agora</a>
       </p>
       <div id="login-footer">
         <strong>JM Topografia e Engenharia</strong><br>
@@ -696,45 +722,45 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       </div>
     </div>
 
-    <!-- ─ PASSO 2: Cadastro ─ -->
-    <div id="step-register" style="width:100%;display:none">
-      <div class="lf-grp">
-        <label class="lf-lbl">Nome completo</label>
-        <input class="lf-inp" type="text" id="reg-name" placeholder="Ex: João Silva">
+    <!-- ─ PASSO 2: Escolha seu plano ─ -->
+    <div id="step-pricing" style="width:100%;display:none">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">Escolha seu plano</div>
+        <div style="font-size:11px;color:var(--sub);margin-top:4px">Acesso completo ao JM MapStudio</div>
       </div>
-      <div class="lf-grp">
-        <label class="lf-lbl">Usuário (login)</label>
-        <input class="lf-inp" type="text" id="reg-username" placeholder="Ex: joao.silva">
+      <!-- Plano Mensal -->
+      <div class="price-card" id="card-mensal" onclick="startCheckout('mensal')">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text)">Mensal</div>
+            <div style="font-size:10px;color:var(--sub);margin-top:2px">Cancele quando quiser</div>
+          </div>
+          <div style="text-align:right">
+            <div id="price-mensal-val" style="font-size:18px;font-weight:900;color:var(--red)">R$ —</div>
+            <div style="font-size:9px;color:var(--sub)">/mês</div>
+          </div>
+        </div>
       </div>
-      <div class="lf-grp">
-        <label class="lf-lbl">E-mail</label>
-        <input class="lf-inp" type="email" id="reg-email" placeholder="seu@email.com">
+      <!-- Plano Anual -->
+      <div class="price-card" id="card-anual" onclick="startCheckout('anual')" style="margin-top:10px;position:relative">
+        <div style="position:absolute;top:-9px;right:12px;background:var(--green);color:#fff;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.5px">ECONOMIZE</div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text)">Anual</div>
+            <div style="font-size:10px;color:var(--sub);margin-top:2px">Equivale a 2 meses grátis</div>
+          </div>
+          <div style="text-align:right">
+            <div id="price-anual-val" style="font-size:18px;font-weight:900;color:var(--green)">R$ —</div>
+            <div style="font-size:9px;color:var(--sub)">/ano</div>
+          </div>
+        </div>
       </div>
-      <div class="lf-grp">
-        <label class="lf-lbl">Senha</label>
-        <input class="lf-inp" type="password" id="reg-pass" placeholder="Mínimo 6 caracteres">
-      </div>
-      <div id="reg-err" class="lf-msg-err"></div>
-      <button id="reg-btn" class="lf-sub-btn" onclick="sendOTP()">Enviar código de verificação</button>
-      <p style="margin-top:12px;text-align:center">
-        <a href="#" class="lf-back-link" onclick="event.preventDefault();showLoginStep()">← Voltar ao login</a>
+      <div id="pricing-err" class="lf-msg-err" style="margin-top:10px"></div>
+      <p style="margin-top:14px;text-align:center;font-size:11px;color:var(--sub)">
+        Pagamento seguro via <strong style="color:var(--text)">Stripe</strong> · Cartão de crédito
       </p>
-    </div>
-
-    <!-- ─ PASSO 3: Verificação OTP ─ -->
-    <div id="step-otp" style="width:100%;display:none;text-align:center">
-      <div style="font-size:44px;margin-bottom:10px">📧</div>
-      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:5px">Código enviado!</div>
-      <div style="font-size:11px;color:var(--sub);margin-bottom:22px;line-height:1.7">
-        Verifique a caixa de entrada de<br>
-        <strong id="otp-email-display" style="color:var(--text)"></strong>
-      </div>
-      <input type="text" id="otp-input" maxlength="6" placeholder="000000" inputmode="numeric" autocomplete="one-time-code">
-      <div id="otp-err" class="lf-msg-err" style="margin-top:8px"></div>
-      <button class="lf-sub-btn" onclick="verifyOTP()" style="margin-top:4px">Verificar e criar conta</button>
-      <div id="otp-timer"></div>
-      <p style="margin-top:10px">
-        <a href="#" class="lf-back-link" onclick="event.preventDefault();showRegStep()">← Reenviar código</a>
+      <p style="margin-top:8px;text-align:center">
+        <a href="#" class="lf-back-link" onclick="event.preventDefault();showLoginStep()">← Voltar ao login</a>
       </p>
     </div>
 
@@ -755,18 +781,14 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
         <div id="admin-user-list"></div>
       </div>
       <div id="admin-right">
-        <div class="adm-sec-title">Adicionar usuário</div>
+        <div class="adm-sec-title">Convidar usuário</div>
         <div class="adm-field">
           <label class="adm-label">Nome completo</label>
           <input class="adm-inp" type="text" id="new-name" placeholder="Ex: João Silva">
         </div>
         <div class="adm-field">
-          <label class="adm-label">Usuário (login)</label>
-          <input class="adm-inp" type="text" id="new-user" placeholder="Ex: joao.silva">
-        </div>
-        <div class="adm-field">
-          <label class="adm-label">Senha inicial</label>
-          <input class="adm-inp" type="password" id="new-pass" placeholder="Mínimo 6 caracteres">
+          <label class="adm-label">E-mail</label>
+          <input class="adm-inp" type="email" id="new-user" placeholder="email@exemplo.com">
         </div>
         <div class="adm-field">
           <label class="adm-label">Perfil</label>
@@ -776,7 +798,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
             <option value="admin">Administrador</option>
           </select>
         </div>
-        <button class="adm-add-btn" onclick="addUser()">+ Adicionar usuário</button>
+        <button class="adm-add-btn" onclick="inviteUser()">✉ Enviar convite</button>
         <div class="adm-msg" id="adm-msg"></div>
         <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
           <div class="adm-sec-title">Perfis de acesso</div>
@@ -1067,6 +1089,18 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 
 </div><!-- /sidebar -->
 
+<!-- ══ SUBSCRIPTION REQUIRED OVERLAY ══ -->
+<div id="sub-required-overlay">
+  <div id="sub-required-card">
+    <div class="sr-icon">🔒</div>
+    <h2>Assinatura necessária</h2>
+    <p>Sua conta não possui uma assinatura ativa.<br>
+       Escolha um plano para acessar o JM MapStudio.</p>
+    <button class="sr-btn sr-btn-primary" onclick="showLoginOverlayWithPricing()">Ver planos e assinar</button>
+    <button class="sr-btn sr-btn-ghost" onclick="doLogout()">Sair da conta</button>
+  </div>
+</div>
+
 <!-- ══ MAP ══ -->
 <div id="map-wrap">
   <div id="map"></div>
@@ -1131,6 +1165,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
@@ -1140,58 +1175,95 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 <script>
 
 // ══════════════════════════════════════════════
-// AUTH — Login, usuários, sessão
+// SUPABASE + STRIPE — Configuração
 // ══════════════════════════════════════════════
+const SUPABASE_URL      = 'https://zzjizqiafnnuqmrkhjqj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6aml6cWlhZm5udXFtcmtoanFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2Nzk3NDMsImV4cCI6MjA5NDI1NTc0M30.D0vhrJY2qgLJdqI8T75dgPer_376ICDOlvSoQVSoovk';
 
-const SALT = 'jmms_v1_salt';
-const USERS_KEY = 'jmms_users';
-const SESS_KEY  = 'jmms_session';
+const STRIPE_PRICE_MENSAL = 'price_1TWhCeDGXf3C25blo6tjO7bJ';
+const STRIPE_PRICE_ANUAL  = 'price_1TWhCeDGXf3C25blotTVM0ja';
+const PRECO_MENSAL = 'R$ 50,00';
+const PRECO_ANUAL  = 'R$ 29,90';
+
+const CHECKOUT_FN_URL = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/create-checkout';
+const INVITE_FN_URL   = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/invite-user';
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const ROLE_LABELS = { admin:'Administrador', operador:'Operador', visualizador:'Visualizador' };
+const ROLE_COLORS = { admin:'#c0392b', operador:'#2980b9', visualizador:'#27ae60' };
 const ROLE_LABELS = { admin:'Administrador', operador:'Operador', visualizador:'Visualizador' };
 const ROLE_COLORS = { admin:'#c0392b', operador:'#2980b9', visualizador:'#27ae60' };
 
-function _sha256(str) {
-  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
-  let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
-  const b=[];
-  for(let i=0;i<str.length;i++){const c=str.charCodeAt(i);if(c<128)b.push(c);else if(c<2048){b.push((c>>6)|192);b.push((c&63)|128);}else{b.push((c>>12)|224);b.push(((c>>6)&63)|128);b.push((c&63)|128);}}
-  const bl=b.length*8; b.push(0x80);
-  while(b.length%64!==56)b.push(0);
-  b.push(0,0,0,0,(bl>>>24)&255,(bl>>>16)&255,(bl>>>8)&255,bl&255);
-  for(let p=0;p<b.length;p+=64){
-    const w=new Array(64);
-    for(let i=0;i<16;i++)w[i]=(b[p+i*4]<<24)|(b[p+i*4+1]<<16)|(b[p+i*4+2]<<8)|b[p+i*4+3];
-    for(let i=16;i<64;i++){const s0=((w[i-15]>>>7)|(w[i-15]<<25))^((w[i-15]>>>18)|(w[i-15]<<14))^(w[i-15]>>>3);const s1=((w[i-2]>>>17)|(w[i-2]<<15))^((w[i-2]>>>19)|(w[i-2]<<13))^(w[i-2]>>>10);w[i]=(w[i-16]+s0+w[i-7]+s1)|0;}
-    let [a,hb,c,d,e,f,g,h]=H;
-    for(let i=0;i<64;i++){const S1=((e>>>6)|(e<<26))^((e>>>11)|(e<<21))^((e>>>25)|(e<<7));const ch=(e&f)^(~e&g);const t1=(h+S1+ch+K[i]+w[i])|0;const S0=((a>>>2)|(a<<30))^((a>>>13)|(a<<19))^((a>>>22)|(a<<10));const maj=(a&hb)^(a&c)^(hb&c);const t2=(S0+maj)|0;h=g;g=f;f=e;e=(d+t1)|0;d=c;c=hb;hb=a;a=(t1+t2)|0;}
-    H=[(H[0]+a)|0,(H[1]+hb)|0,(H[2]+c)|0,(H[3]+d)|0,(H[4]+e)|0,(H[5]+f)|0,(H[6]+g)|0,(H[7]+h)|0];
-  }
-  return H.map(x=>(x>>>0).toString(16).padStart(8,'0')).join('');
-}
-async function hashPwd(pwd) { return _sha256(pwd + SALT); }
-function getUsers()   { try { return JSON.parse(localStorage.getItem(USERS_KEY)) || []; } catch { return []; } }
-function saveUsers(u) { localStorage.setItem(USERS_KEY, JSON.stringify(u)); }
-function getSession() { try { return JSON.parse(sessionStorage.getItem(SESS_KEY)); } catch { return null; } }
-function setSession(d){ sessionStorage.setItem(SESS_KEY, JSON.stringify(d)); }
-function clearSession(){ sessionStorage.removeItem(SESS_KEY); }
-
+// ── Inicialização ──────────────────────────────
 async function initAuth() {
-  // Se URL tem parâmetros de localização compartilhada, entra como visitante sem login
   const params = new URLSearchParams(window.location.search);
+
+  if (params.get('checkout') === 'success') {
+    toast('Assinatura ativada! Faça login para acessar o sistema.', 'ok', 7000);
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+
   if (params.get('lat') && params.get('lon')) {
     entrarComoVisitante(params.get('n') || 'Visitante');
     return;
   }
-  const h = await hashPwd('123');
-  let users = getUsers();
-  if (!users.length) {
-    users = [{ id:1, username:'admin', name:'Administrador', role:'admin', hash:h, active:true }];
-  } else {
-    const admin = users.find(u => u.username === 'admin');
-    if (admin) admin.hash = h;
+
+  document.getElementById('price-mensal-val').textContent = PRECO_MENSAL;
+  document.getElementById('price-anual-val').textContent  = PRECO_ANUAL;
+
+  const { data: { session } } = await db.auth.getSession();
+  if (session) await applySession(session);
+
+  db.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session) await applySession(session);
+    else if (event === 'SIGNED_OUT') location.reload();
+  });
+}
+
+async function applySession(session) {
+  const { data: profile, error } = await db
+    .from('profiles')
+    .select('name, role')
+    .eq('id', session.user.id)
+    .single();
+
+  if (error || !profile) { showSubscriptionRequired(); return; }
+
+  if (profile.role !== 'admin') {
+    const { data: sub } = await db
+      .from('subscriptions')
+      .select('status')
+      .eq('user_id', session.user.id)
+      .in('status', ['active', 'trialing'])
+      .maybeSingle();
+    if (!sub) { showSubscriptionRequired(); return; }
   }
-  saveUsers(users);
-  const s = getSession();
-  if (s) { applySession(s); }
+
+  document.getElementById('login-overlay').classList.add('gone');
+  document.getElementById('sub-required-overlay').classList.remove('show');
+
+  const initials = profile.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  document.getElementById('user-avatar').textContent = initials;
+  document.getElementById('user-avatar').style.background = ROLE_COLORS[profile.role] || 'var(--red)';
+  document.getElementById('user-display-name').textContent = profile.name;
+  const rl = document.getElementById('user-role-lbl');
+  rl.textContent = ROLE_LABELS[profile.role] || profile.role;
+  rl.className = `role-${profile.role}`;
+  if (profile.role === 'admin') document.getElementById('btn-admin').style.display = 'flex';
+  applyRoleRestrictions(profile.role);
+}
+
+function showSubscriptionRequired() {
+  document.getElementById('login-overlay').classList.add('gone');
+  document.getElementById('sub-required-overlay').classList.add('show');
+}
+
+function showLoginOverlayWithPricing() {
+  document.getElementById('sub-required-overlay').classList.remove('show');
+  document.getElementById('login-overlay').classList.remove('gone');
+  showPricingStep();
 }
 
 function entrarComoVisitante(nome) {
@@ -1206,22 +1278,8 @@ function entrarComoVisitante(nome) {
   applyRoleRestrictions('visualizador');
 }
 
-function applySession(s) {
-  document.getElementById('login-overlay').classList.add('gone');
-  const initials = s.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-  document.getElementById('user-avatar').textContent = initials;
-  document.getElementById('user-avatar').style.background = ROLE_COLORS[s.role] || 'var(--red)';
-  document.getElementById('user-display-name').textContent = s.name;
-  const rl = document.getElementById('user-role-lbl');
-  rl.textContent = ROLE_LABELS[s.role] || s.role;
-  rl.className = `role-${s.role}`;
-  if (s.role === 'admin') document.getElementById('btn-admin').style.display = 'flex';
-  applyRoleRestrictions(s.role);
-}
-
 function applyRoleRestrictions(role) {
   if (role === 'visualizador') {
-    // Bloqueia ferramentas de desenho para visualizadores
     document.querySelectorAll('.draw-btn').forEach(b => { b.disabled = true; b.title = 'Seu perfil não permite desenhar'; });
     document.querySelectorAll('.measure-btn').forEach(b => b.disabled = true);
     const dc = document.querySelector('.leaflet-draw-toolbar');
@@ -1229,170 +1287,62 @@ function applyRoleRestrictions(role) {
   }
 }
 
+// ── Login / Logout ─────────────────────────────
 async function doLogin() {
-  const username = (document.getElementById('li-user').value || '').trim().toLowerCase();
+  const email    = (document.getElementById('li-user').value || '').trim().toLowerCase();
   const password = document.getElementById('li-pass').value || '';
-  const errEl = document.getElementById('login-err');
+  const errEl    = document.getElementById('login-err');
   errEl.textContent = '';
-  if (!username || !password) { errEl.textContent = 'Preencha usuário e senha.'; return; }
+  if (!email || !password) { errEl.textContent = 'Preencha e-mail e senha.'; return; }
   const btn = document.getElementById('login-btn');
   btn.disabled = true; btn.textContent = 'Verificando...';
   try {
-    const users = getUsers();
-    const user = users.find(u => u.username.toLowerCase() === username && u.active !== false);
-    if (!user) { errEl.textContent = 'Usuário não encontrado.'; return; }
-    const h = await hashPwd(password);
-    if (h !== user.hash) { errEl.textContent = 'Senha incorreta.'; return; }
-    const session = { id:user.id, username:user.username, name:user.name, role:user.role };
-    setSession(session);
-    applySession(session);
+    const { error } = await db.auth.signInWithPassword({ email, password });
+    if (error) errEl.textContent = error.message.includes('Invalid') ? 'E-mail ou senha incorretos.' : 'Erro ao entrar. Tente novamente.';
   } catch(e) { errEl.textContent = 'Erro ao autenticar. Tente novamente.'; }
   finally { btn.disabled = false; btn.textContent = 'Entrar no sistema'; }
 }
 
-function doLogout() {
-  clearSession();
+async function doLogout() {
+  await db.auth.signOut();
   location.reload();
 }
 
-// ══════════════════════════════════════════════
-// REGISTRO COM VERIFICAÇÃO POR E-MAIL (EmailJS)
-// ══════════════════════════════════════════════
-// Configuração — crie conta gratuita em emailjs.com
-//   1. Crie um serviço (Gmail, Outlook, etc.) → copie o Service ID
-//   2. Crie um template com as variáveis: {{to_name}}, {{to_email}}, {{otp_code}}, {{app_name}}
-//      Exemplo de corpo: "Olá {{to_name}}, seu código é: {{otp_code}}"
-//   3. Copie a Public Key em Account → API Keys
-const EJS_KEY      = '';   // ← Cole sua Public Key aqui
-const EJS_SERVICE  = '';   // ← Cole o Service ID aqui
-const EJS_TEMPLATE = '';   // ← Cole o Template ID aqui
-
-const ejsOK = () => !!(EJS_KEY && EJS_SERVICE && EJS_TEMPLATE);
-if (ejsOK() && typeof emailjs !== 'undefined') emailjs.init(EJS_KEY);
-
-let _regOTP    = null;
-let _regData   = null;
-let _otpExpiry = null;
-
-// ── Navegação entre passos ─────────────────────
+// ── Planos / Checkout ──────────────────────────
 function showLoginStep() {
-  document.getElementById('step-login').style.display    = 'block';
-  document.getElementById('step-register').style.display = 'none';
-  document.getElementById('step-otp').style.display      = 'none';
-  _regOTP = null; _regData = null; _otpExpiry = null;
+  document.getElementById('step-login').style.display   = 'block';
+  document.getElementById('step-pricing').style.display = 'none';
 }
 
-function showRegStep() {
-  if (!ejsOK()) {
-    toast('Cadastro por e-mail não configurado. Solicite ao administrador.', 'warn', 7000);
-    return;
-  }
-  document.getElementById('step-login').style.display    = 'none';
-  document.getElementById('step-register').style.display = 'block';
-  document.getElementById('step-otp').style.display      = 'none';
-  document.getElementById('reg-err').textContent = '';
-  setTimeout(() => document.getElementById('reg-name').focus(), 60);
+function showPricingStep() {
+  document.getElementById('step-login').style.display   = 'none';
+  document.getElementById('step-pricing').style.display = 'block';
+  document.getElementById('pricing-err').textContent    = '';
 }
 
-// ── Enviar OTP ────────────────────────────────
-async function sendOTP() {
-  const name     = document.getElementById('reg-name').value.trim();
-  const username = document.getElementById('reg-username').value.trim().toLowerCase().replace(/\s+/g,'');
-  const email    = document.getElementById('reg-email').value.trim().toLowerCase();
-  const pass     = document.getElementById('reg-pass').value;
-  const errEl    = document.getElementById('reg-err');
-  errEl.textContent = '';
-
-  if (!name || !username || !email || !pass) { errEl.textContent = 'Preencha todos os campos.'; return; }
-  if (pass.length < 6)                       { errEl.textContent = 'Senha mínima: 6 caracteres.'; return; }
-  if (!/\S+@\S+\.\S+/.test(email))           { errEl.textContent = 'E-mail inválido.'; return; }
-  if (!/^[a-z0-9._-]+$/.test(username))      { errEl.textContent = 'Usuário: letras, números, ponto ou hífen.'; return; }
-
-  const users = getUsers();
-  if (users.find(u => u.username === username)) { errEl.textContent = 'Usuário já existe. Escolha outro.'; return; }
-  if (users.find(u => u.email === email))       { errEl.textContent = 'E-mail já cadastrado. Faça login.'; return; }
-
-  const btn = document.getElementById('reg-btn');
-  btn.disabled = true; btn.textContent = 'Enviando...';
-
-  _regOTP    = String(Math.floor(100000 + Math.random() * 900000));
-  _regData   = { name, username, email, pass };
-  _otpExpiry = Date.now() + 10 * 60 * 1000;
-
+async function startCheckout(plan) {
+  const priceId = plan === 'anual' ? STRIPE_PRICE_ANUAL : STRIPE_PRICE_MENSAL;
+  const errEl   = document.getElementById('pricing-err');
+  errEl.textContent = 'Redirecionando para o pagamento...';
   try {
-    if (typeof emailjs === 'undefined') throw new Error('EmailJS não carregado');
-    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-      to_name:  name,
-      to_email: email,
-      otp_code: _regOTP,
-      app_name: 'JM MapStudio'
+    const { data: { session } } = await db.auth.getSession();
+    const headers = { 'Content-Type': 'application/json' };
+    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+    const res  = await fetch(CHECKOUT_FN_URL, {
+      method: 'POST', headers,
+      body: JSON.stringify({
+        priceId,
+        successUrl: window.location.origin + window.location.pathname + '?checkout=success',
+        cancelUrl:  window.location.origin + window.location.pathname + '?checkout=cancel',
+      })
     });
-    showOTPStep();
-  } catch(e) {
-    _regOTP = null; _regData = null; _otpExpiry = null;
-    errEl.textContent = 'Falha ao enviar e-mail. Verifique a configuração do EmailJS.';
-    console.error('EmailJS error:', e);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Enviar código de verificação';
-  }
+    const data = await res.json();
+    if (data.url) window.location.href = data.url;
+    else errEl.textContent = 'Erro ao iniciar checkout. Tente novamente.';
+  } catch(e) { errEl.textContent = 'Erro de conexão. Tente novamente.'; }
 }
 
-// ── Exibir passo OTP ──────────────────────────
-function showOTPStep() {
-  document.getElementById('step-register').style.display = 'none';
-  document.getElementById('step-otp').style.display      = 'block';
-  document.getElementById('otp-email-display').textContent = _regData.email;
-  document.getElementById('otp-input').value              = '';
-  document.getElementById('otp-err').textContent          = '';
-  startOTPTimer();
-  setTimeout(() => document.getElementById('otp-input').focus(), 60);
-}
-
-function startOTPTimer() {
-  const el = document.getElementById('otp-timer');
-  const tick = () => {
-    if (!_otpExpiry) { el.textContent = ''; return; }
-    const rem = Math.max(0, Math.round((_otpExpiry - Date.now()) / 1000));
-    if (rem === 0) { el.style.color = '#e74c3c'; el.textContent = 'Código expirado — volte e solicite novamente.'; return; }
-    const m = Math.floor(rem / 60), s = rem % 60;
-    el.style.color = rem < 60 ? 'var(--amber)' : 'var(--sub)';
-    el.textContent = `Código válido por ${m}:${String(s).padStart(2,'0')}`;
-    setTimeout(tick, 1000);
-  };
-  tick();
-}
-
-// ── Verificar OTP e criar conta ───────────────
-async function verifyOTP() {
-  const code  = document.getElementById('otp-input').value.trim();
-  const errEl = document.getElementById('otp-err');
-  errEl.textContent = '';
-
-  if (!_regOTP || !_regData)          { errEl.textContent = 'Sessão expirada. Reinicie o cadastro.'; return; }
-  if (Date.now() > _otpExpiry)        { errEl.textContent = 'Código expirado. Volte e solicite novamente.'; return; }
-  if (!code || code.length !== 6)     { errEl.textContent = 'Digite os 6 dígitos do código.'; return; }
-  if (code !== _regOTP)               { errEl.textContent = 'Código incorreto. Tente novamente.'; return; }
-
-  const hash  = await hashPwd(_regData.pass);
-  const users = getUsers();
-  if (users.find(u => u.username === _regData.username)) { errEl.textContent = 'Usuário já existe. Faça login.'; return; }
-
-  const newUser = {
-    id: Date.now(), username: _regData.username, name: _regData.name,
-    role: 'operador', hash, email: _regData.email, active: true
-  };
-  users.push(newUser);
-  saveUsers(users);
-
-  _regOTP = null; _regData = null; _otpExpiry = null;
-
-  const session = { id: newUser.id, username: newUser.username, name: newUser.name, role: newUser.role };
-  setSession(session);
-  applySession(session);
-  toast(`Bem-vindo(a), ${newUser.name}!`, 'ok');
-}
-
-// ── Admin panel ──────────────────────────────
+// ── Admin panel ────────────────────────────────
 function openAdminPanel() {
   renderAdminUsers();
   document.getElementById('admin-overlay').classList.add('open');
@@ -1401,61 +1351,68 @@ function closeAdminPanel() {
   document.getElementById('admin-overlay').classList.remove('open');
 }
 
-function renderAdminUsers() {
-  const users = getUsers();
-  const s = getSession();
+async function renderAdminUsers() {
   const el = document.getElementById('admin-user-list');
-  if (!users.length) { el.innerHTML = '<div class="empty-state">Nenhum usuário</div>'; return; }
-  el.innerHTML = users.map(u => {
-    const initials = u.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-    const isSelf = s && u.id === s.id;
-    const isLastAdmin = u.role === 'admin' && users.filter(x=>x.role==='admin'&&x.active!==false).length <= 1;
-    const canDel = !isSelf && !isLastAdmin;
+  el.innerHTML = '<div style="font-size:11px;color:var(--sub);padding:8px 0">Carregando...</div>';
+  const { data: profiles, error } = await db
+    .from('profiles')
+    .select('id, name, role, stripe_customer_id')
+    .order('created_at', { ascending: false });
+  if (error || !profiles?.length) { el.innerHTML = '<div class="empty-state">Nenhum usuário</div>'; return; }
+  el.innerHTML = profiles.map(u => {
+    const initials = u.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
     return `<div class="adm-user-card">
       <div class="auc-av" style="background:${ROLE_COLORS[u.role]||'#555'}">${initials}</div>
       <div class="auc-info">
-        <div class="auc-name">${u.name}${isSelf?' <span style="color:var(--sub);font-size:10px">(você)</span>':''}</div>
-        <div class="auc-user">@${u.username}</div>
+        <div class="auc-name">${u.name}</div>
+        <div class="auc-user">${u.stripe_customer_id ? '💳 assinante' : '○ sem assinatura'}</div>
       </div>
-      <span class="auc-role role-${u.role}">${ROLE_LABELS[u.role]||u.role}</span>
-      <button class="auc-del" title="Remover usuário" onclick="removeUser(${u.id})" ${canDel?'':'disabled'}>🗑</button>
+      <select class="adm-sel" style="font-size:10px;padding:4px 6px" onchange="changeRole('${u.id}',this.value)">
+        <option value="operador"     ${u.role==='operador'    ?'selected':''}>Operador</option>
+        <option value="visualizador" ${u.role==='visualizador'?'selected':''}>Visualizador</option>
+        <option value="admin"        ${u.role==='admin'       ?'selected':''}>Admin</option>
+      </select>
     </div>`;
   }).join('');
 }
 
-async function addUser() {
-  const name = document.getElementById('new-name').value.trim();
-  const username = document.getElementById('new-user').value.trim().toLowerCase();
-  const pass = document.getElementById('new-pass').value;
-  const role = document.getElementById('new-role').value;
-  const msg = document.getElementById('adm-msg');
+async function changeRole(userId, newRole) {
+  const { error } = await db.from('profiles').update({ role: newRole }).eq('id', userId);
+  if (error) toast('Erro ao alterar perfil.', 'err');
+  else toast('Perfil atualizado.', 'ok');
+}
+
+async function inviteUser() {
+  const name  = document.getElementById('new-name').value.trim();
+  const email = document.getElementById('new-user').value.trim().toLowerCase();
+  const role  = document.getElementById('new-role').value;
+  const msg   = document.getElementById('adm-msg');
   msg.textContent = ''; msg.className = 'adm-msg';
-  if (!name || !username || !pass) { msg.textContent = 'Preencha todos os campos.'; msg.className='adm-msg err'; return; }
-  if (pass.length < 6) { msg.textContent = 'Senha mínima: 6 caracteres.'; msg.className='adm-msg err'; return; }
-  const users = getUsers();
-  if (users.find(u=>u.username===username)) { msg.textContent = 'Usuário já existe.'; msg.className='adm-msg err'; return; }
-  const hash = await hashPwd(pass);
-  const id = Date.now();
-  users.push({ id, username, name, role, hash, active:true });
-  saveUsers(users);
-  ['new-name','new-user','new-pass'].forEach(id=>{ document.getElementById(id).value=''; });
-  msg.textContent = `Usuário "${name}" adicionado.`; msg.className='adm-msg ok';
-  renderAdminUsers();
+  if (!name || !email) { msg.textContent = 'Preencha nome e e-mail.'; msg.className = 'adm-msg err'; return; }
+  if (!/\S+@\S+\.\S+/.test(email)) { msg.textContent = 'E-mail inválido.'; msg.className = 'adm-msg err'; return; }
+  msg.textContent = 'Enviando convite...';
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    const res = await fetch(INVITE_FN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ email, name, role })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      msg.textContent = `Convite enviado para ${email}.`; msg.className = 'adm-msg ok';
+      document.getElementById('new-name').value = '';
+      document.getElementById('new-user').value = '';
+      renderAdminUsers();
+    } else {
+      msg.textContent = data.error || 'Erro ao enviar convite.'; msg.className = 'adm-msg err';
+    }
+  } catch(e) { msg.textContent = 'Erro de conexão.'; msg.className = 'adm-msg err'; }
 }
 
-function removeUser(id) {
-  const users = getUsers().filter(u=>u.id!==id);
-  saveUsers(users);
-  renderAdminUsers();
-}
-
-// ── Keyboard shortcuts ────────────────────────
-document.getElementById('li-pass').addEventListener('keydown',    e=>{ if(e.key==='Enter') doLogin(); });
-document.getElementById('li-user').addEventListener('keydown',    e=>{ if(e.key==='Enter') document.getElementById('li-pass').focus(); });
-document.getElementById('reg-pass').addEventListener('keydown',   e=>{ if(e.key==='Enter') sendOTP(); });
-document.getElementById('reg-email').addEventListener('keydown',  e=>{ if(e.key==='Enter') document.getElementById('reg-pass').focus(); });
-document.getElementById('otp-input').addEventListener('keydown',  e=>{ if(e.key==='Enter') verifyOTP(); });
-document.getElementById('otp-input').addEventListener('input',    e=>{ e.target.value=e.target.value.replace(/\D/g,''); });
+// ── Teclado ────────────────────────────────────
+document.getElementById('li-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+document.getElementById('li-user').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('li-pass').focus(); });
 
 // Inicializa auth
 initAuth();
@@ -1599,14 +1556,6 @@ const drawControl = new L.Control.Draw({
 });
 map.addControl(drawControl);
 
-// Apply toolbar restriction if visualizador session was loaded before map init
-(function(){
-  const s = (function(){ try{ return JSON.parse(sessionStorage.getItem('jmms_session')); }catch{ return null; } })();
-  if(s && s.role === 'visualizador'){
-    const dc = document.querySelector('.leaflet-draw-toolbar');
-    if(dc) dc.style.display = 'none';
-  }
-})();
 
 // ── Store & estado de edição ──────────────────
 let drawnStore   = [];
