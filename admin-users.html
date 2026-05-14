@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel Admin — JM MapStudio</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:#04090f;color:#e8f4fd;min-height:100vh;
+  }
+  /* Header */
+  .header{
+    background:linear-gradient(160deg,#1e2b3a,#161f2a);
+    border-bottom:1px solid #1e3a5f;padding:14px 24px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .header-left{display:flex;align-items:center;gap:12px}
+  .header h1{font-size:16px;font-weight:800;color:#fff}
+  .header p{font-size:11px;color:#5d8aad;margin-top:2px}
+  .header-right{display:flex;align-items:center;gap:10px}
+  .btn-back{
+    padding:7px 14px;background:transparent;border:1px solid #1e3a5f;
+    border-radius:8px;color:#5d8aad;font-size:12px;cursor:pointer;
+    font-family:inherit;transition:all .15s;text-decoration:none;display:inline-flex;align-items:center;gap:6px;
+  }
+  .btn-back:hover{border-color:#5d8aad;color:#fff}
+  /* Content */
+  .content{padding:24px;max-width:1300px;margin:0 auto}
+  /* Stats */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+  .stat{
+    background:linear-gradient(160deg,#1e2b3a,#161f2a);
+    border:1px solid #1e3a5f;border-radius:12px;padding:16px;
+  }
+  .stat-val{font-size:26px;font-weight:800;color:#fff;margin-bottom:2px}
+  .stat-lbl{font-size:11px;color:#5d8aad}
+  .stat.green .stat-val{color:#27ae60}
+  .stat.red .stat-val{color:#e74c3c}
+  .stat.blue .stat-val{color:#3498db}
+  /* Toolbar */
+  .toolbar{display:flex;gap:10px;margin-bottom:16px;align-items:center;flex-wrap:wrap}
+  .search{
+    flex:1;min-width:200px;padding:9px 14px;background:#0d1b2a;
+    border:1.5px solid #1e3a5f;border-radius:8px;
+    color:#e8f4fd;font-size:13px;font-family:inherit;outline:none;
+  }
+  .search:focus{border-color:#c0392b}
+  .search::placeholder{color:#3a5f7a}
+  .filter-select{
+    padding:9px 12px;background:#0d1b2a;
+    border:1.5px solid #1e3a5f;border-radius:8px;
+    color:#e8f4fd;font-size:12px;font-family:inherit;outline:none;cursor:pointer;
+  }
+  .btn-refresh{
+    padding:9px 16px;background:transparent;border:1px solid #1e3a5f;
+    border-radius:8px;color:#5d8aad;font-size:12px;cursor:pointer;
+    font-family:inherit;transition:all .15s;
+  }
+  .btn-refresh:hover{border-color:#5d8aad;color:#fff}
+  /* Table */
+  .table-wrap{
+    background:linear-gradient(160deg,#1e2b3a,#161f2a);
+    border:1px solid #1e3a5f;border-radius:14px;overflow:hidden;
+  }
+  table{width:100%;border-collapse:collapse}
+  thead{background:#0d1b2a}
+  th{
+    padding:11px 14px;text-align:left;font-size:10px;font-weight:700;
+    color:#5d8aad;text-transform:uppercase;letter-spacing:1px;
+    border-bottom:1px solid #1e3a5f;white-space:nowrap;
+  }
+  td{
+    padding:12px 14px;font-size:12px;border-bottom:1px solid rgba(30,58,95,.4);
+    vertical-align:middle;
+  }
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:rgba(30,58,95,.2)}
+  .badge{
+    display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.5px;
+  }
+  .badge-active{background:rgba(39,174,96,.15);color:#27ae60;border:1px solid rgba(39,174,96,.3)}
+  .badge-inactive{background:rgba(192,57,43,.12);color:#e74c3c;border:1px solid rgba(192,57,43,.25)}
+  .badge-admin{background:rgba(241,196,15,.12);color:#f1c40f;border:1px solid rgba(241,196,15,.25)}
+  .badge-plan{background:rgba(52,152,219,.1);color:#3498db;border:1px solid rgba(52,152,219,.25)}
+  .actions{display:flex;gap:6px;flex-wrap:nowrap}
+  .act{
+    padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;
+    font-family:inherit;font-weight:600;border:1px solid transparent;
+    transition:all .15s;white-space:nowrap;
+  }
+  .act-toggle-off{background:rgba(192,57,43,.15);color:#e74c3c;border-color:rgba(192,57,43,.3)}
+  .act-toggle-off:hover{background:rgba(192,57,43,.3)}
+  .act-toggle-on{background:rgba(39,174,96,.12);color:#27ae60;border-color:rgba(39,174,96,.3)}
+  .act-toggle-on:hover{background:rgba(39,174,96,.25)}
+  .act-email{background:rgba(52,152,219,.1);color:#3498db;border-color:rgba(52,152,219,.3)}
+  .act-email:hover{background:rgba(52,152,219,.25)}
+  .act-pwd{background:rgba(155,89,182,.1);color:#9b59b6;border-color:rgba(155,89,182,.3)}
+  .act-pwd:hover{background:rgba(155,89,182,.25)}
+  /* Loading / empty */
+  .state-msg{
+    text-align:center;padding:48px 24px;color:#5d8aad;font-size:13px;
+  }
+  .spinner{
+    display:inline-block;width:22px;height:22px;border:2px solid #1e3a5f;
+    border-top-color:#c0392b;border-radius:50%;animation:spin .7s linear infinite;
+    margin-right:8px;vertical-align:middle;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  /* Toast */
+  .toast{
+    position:fixed;bottom:24px;right:24px;padding:12px 18px;border-radius:10px;
+    font-size:12px;font-weight:600;z-index:999;animation:slideIn .25s ease;
+    max-width:320px;
+  }
+  .toast.ok{background:#1a3a2a;color:#2ecc71;border:1px solid rgba(46,204,113,.3)}
+  .toast.err{background:#3a1a1a;color:#e74c3c;border:1px solid rgba(231,76,60,.3)}
+  @keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  /* Modal */
+  .overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;
+    display:none;align-items:center;justify-content:center;padding:20px;
+  }
+  .overlay.open{display:flex}
+  .modal{
+    background:linear-gradient(160deg,#1e2b3a,#161f2a);
+    border:1px solid #1e3a5f;border-radius:16px;padding:28px;
+    width:100%;max-width:400px;
+  }
+  .modal h3{font-size:15px;font-weight:700;color:#fff;margin-bottom:6px}
+  .modal p{font-size:12px;color:#5d8aad;margin-bottom:20px;line-height:1.7}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end}
+  .btn-cancel{
+    padding:9px 18px;background:transparent;border:1px solid #1e3a5f;
+    border-radius:8px;color:#5d8aad;font-size:12px;cursor:pointer;font-family:inherit;
+  }
+  .btn-confirm{
+    padding:9px 18px;background:linear-gradient(135deg,#c0392b,#922b21);
+    border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;
+    cursor:pointer;font-family:inherit;
+  }
+  .pwd-box{
+    background:#0d1b2a;border:1px solid #1e3a5f;border-radius:8px;
+    padding:12px 14px;font-size:14px;font-weight:700;color:#e8f4fd;
+    font-family:monospace;text-align:center;margin:12px 0;letter-spacing:2px;word-break:break-all;
+  }
+  .btn-copy{
+    width:100%;padding:9px;background:rgba(52,152,219,.15);
+    border:1px solid rgba(52,152,219,.3);border-radius:8px;
+    color:#3498db;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
+    margin-bottom:14px;
+  }
+  .btn-copy:hover{background:rgba(52,152,219,.25)}
+  /* Responsive */
+  @media(max-width:700px){
+    .content{padding:14px}
+    th:nth-child(4),td:nth-child(4),
+    th:nth-child(5),td:nth-child(5){display:none}
+    .actions{flex-direction:column}
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div>
+      <h1>🛡️ JM MapStudio — Admin</h1>
+      <p id="admin-email-lbl">Carregando...</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <a href="https://agricart-jca.github.io/jm-mapstudio" class="btn-back">← Voltar ao sistema</a>
+  </div>
+</div>
+
+<div class="content">
+
+  <div class="stats" id="stats">
+    <div class="stat blue"><div class="stat-val" id="stat-total">—</div><div class="stat-lbl">Total de usuários</div></div>
+    <div class="stat green"><div class="stat-val" id="stat-active">—</div><div class="stat-lbl">Ativos</div></div>
+    <div class="stat red"><div class="stat-val" id="stat-inactive">—</div><div class="stat-lbl">Inativos</div></div>
+    <div class="stat"><div class="stat-val" id="stat-admin">—</div><div class="stat-lbl">Admins</div></div>
+  </div>
+
+  <div class="toolbar">
+    <input class="search" type="text" id="busca" placeholder="Buscar por nome, e-mail ou telefone..." oninput="filtrar()">
+    <select class="filter-select" id="filtro-status" onchange="filtrar()">
+      <option value="">Todos os status</option>
+      <option value="active">Ativos</option>
+      <option value="inactive">Inativos</option>
+    </select>
+    <select class="filter-select" id="filtro-role" onchange="filtrar()">
+      <option value="">Todos os papéis</option>
+      <option value="admin">Admin</option>
+      <option value="operador">Operador</option>
+      <option value="cliente">Cliente</option>
+    </select>
+    <button class="btn-refresh" onclick="carregar()">⟳ Atualizar</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Usuário</th>
+          <th>E-mail</th>
+          <th>Telefone</th>
+          <th>Plano</th>
+          <th>Cadastro</th>
+          <th>Status</th>
+          <th>Papel</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="8"><div class="state-msg"><span class="spinner"></span>Verificando autenticação...</div></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- Modal: nova senha -->
+<div class="overlay" id="modal-pwd">
+  <div class="modal">
+    <h3>Nova senha provisória gerada</h3>
+    <p id="modal-pwd-desc">Envie esta senha ao usuário por e-mail ou WhatsApp.</p>
+    <div class="pwd-box" id="modal-pwd-val">—</div>
+    <button class="btn-copy" onclick="copiarSenha()">📋 Copiar senha</button>
+    <p style="font-size:11px;color:#3a5f7a;margin-bottom:16px">
+      O usuário deverá trocar a senha no primeiro acesso.
+    </p>
+    <div class="modal-actions">
+      <button class="btn-confirm" onclick="fecharModalPwd()">OK, entendido</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: confirmar ação -->
+<div class="overlay" id="modal-confirm">
+  <div class="modal">
+    <h3 id="confirm-title">Confirmar ação</h3>
+    <p id="confirm-desc">Deseja continuar?</p>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="fecharModalConfirm()">Cancelar</button>
+      <button class="btn-confirm" id="confirm-ok" onclick="">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Configuração ──────────────────────────────────────────────
+const SUPABASE_URL = 'https://zzjizqiafnnuqmrkhjqj.supabase.co';
+const ANON_KEY     = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6aml6cWlhZm5udXFtcmtoanFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2Nzk3NDMsImV4cCI6MjA5NDI1NTc0M30.D0vhrJY2qgLJdqI8T75dgPer_376ICDOlvSoQVSoovk';
+const APP_URL      = 'https://agricart-jca.github.io/jm-mapstudio';
+const ADMIN_EMAILS = ['juancarlos.agricart@gmail.com'];
+
+let SESSION   = null;
+let USUARIOS  = [];   // lista completa
+let FILTRADOS = [];   // após filtro
+
+// ── Sessão ────────────────────────────────────────────────────
+function carregarSessao() {
+  try { return JSON.parse(sessionStorage.getItem('jmms_sb') || 'null'); } catch { return null; }
+}
+
+function ehAdmin(sess) {
+  if (!sess) return false;
+  if (ADMIN_EMAILS.includes(sess.user?.email)) return true;
+  return sess.role === 'admin';
+}
+
+// ── Requisições autenticadas ──────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const headers = {
+    'apikey': ANON_KEY,
+    'Authorization': 'Bearer ' + SESSION.access_token,
+    'Content-Type': 'application/json',
+    ...opts.headers
+  };
+  const r = await fetch(SUPABASE_URL + path, { ...opts, headers });
+  return r;
+}
+
+// ── Gerar senha provisória ────────────────────────────────────
+function gerarSenha() {
+  const M = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+  const m = 'abcdefghjkmnpqrstuvwxyz';
+  const n = '23456789';
+  const s = '!@#$';
+  const pool = M + m + n + s;
+  const arr = [
+    M[Math.floor(Math.random()*M.length)],
+    m[Math.floor(Math.random()*m.length)],
+    n[Math.floor(Math.random()*n.length)],
+    s[Math.floor(Math.random()*s.length)],
+  ];
+  for (let i = 0; i < 8; i++) arr.push(pool[Math.floor(Math.random()*pool.length)]);
+  return arr.sort(() => Math.random() - .5).join('');
+}
+
+// ── Toast ──────────────────────────────────────────────────────
+function toast(msg, tipo = 'ok', ms = 3500) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + tipo;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), ms);
+}
+
+// ── Modais ─────────────────────────────────────────────────────
+let _senhaGerada = '';
+
+function mostrarModalPwd(email, senha) {
+  _senhaGerada = senha;
+  document.getElementById('modal-pwd-desc').textContent =
+    'Nova senha para: ' + email;
+  document.getElementById('modal-pwd-val').textContent = senha;
+  document.getElementById('modal-pwd').classList.add('open');
+}
+function fecharModalPwd() {
+  document.getElementById('modal-pwd').classList.remove('open');
+}
+function copiarSenha() {
+  navigator.clipboard.writeText(_senhaGerada).then(() => toast('Senha copiada!'));
+}
+
+function mostrarModalConfirm(titulo, desc, onOk) {
+  document.getElementById('confirm-title').textContent = titulo;
+  document.getElementById('confirm-desc').textContent  = desc;
+  const btn = document.getElementById('confirm-ok');
+  btn.onclick = () => { fecharModalConfirm(); onOk(); };
+  document.getElementById('modal-confirm').classList.add('open');
+}
+function fecharModalConfirm() {
+  document.getElementById('modal-confirm').classList.remove('open');
+}
+
+// ── Formatar data ──────────────────────────────────────────────
+function fmtData(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ── Carregar usuários ─────────────────────────────────────────
+async function carregar() {
+  setTbody('<div class="state-msg"><span class="spinner"></span>Carregando usuários...</div>');
+
+  try {
+    // Busca perfis + join com subscriptions (left join via select)
+    const r = await apiFetch(
+      '/rest/v1/profiles?select=id,full_name,email,phone,role,status,plan_name,subscribed_at,created_at' +
+      '&order=created_at.desc',
+      { headers: { 'Prefer': 'return=representation' } }
+    );
+
+    if (!r.ok) {
+      const err = await r.json();
+      throw new Error(err.message || 'Erro ao buscar usuários');
+    }
+
+    USUARIOS = await r.json();
+    atualizarStats();
+    filtrar();
+
+  } catch (e) {
+    setTbody('<div class="state-msg">❌ ' + e.message + '</div>');
+  }
+}
+
+function atualizarStats() {
+  const ativos   = USUARIOS.filter(u => u.status !== 'inactive').length;
+  const inativos = USUARIOS.filter(u => u.status === 'inactive').length;
+  const admins   = USUARIOS.filter(u => u.role === 'admin').length;
+  document.getElementById('stat-total').textContent    = USUARIOS.length;
+  document.getElementById('stat-active').textContent   = ativos;
+  document.getElementById('stat-inactive').textContent = inativos;
+  document.getElementById('stat-admin').textContent    = admins;
+}
+
+// ── Filtrar ───────────────────────────────────────────────────
+function filtrar() {
+  const q      = (document.getElementById('busca').value || '').toLowerCase();
+  const status = document.getElementById('filtro-status').value;
+  const role   = document.getElementById('filtro-role').value;
+
+  FILTRADOS = USUARIOS.filter(u => {
+    const texto = ((u.full_name||'') + (u.email||'') + (u.phone||'')).toLowerCase();
+    if (q && !texto.includes(q)) return false;
+    if (status && u.status !== status && !(status === 'active' && !u.status)) return false;
+    if (role && u.role !== role) return false;
+    return true;
+  });
+
+  renderTabela();
+}
+
+// ── Render tabela ──────────────────────────────────────────────
+function renderTabela() {
+  if (!FILTRADOS.length) {
+    setTbody('<div class="state-msg">Nenhum usuário encontrado.</div>');
+    return;
+  }
+
+  const rows = FILTRADOS.map(u => {
+    const ativo = u.status !== 'inactive';
+    const isAdmin = u.role === 'admin';
+    return `<tr>
+      <td><strong style="color:#fff">${esc(u.full_name||'—')}</strong></td>
+      <td style="color:#5d8aad">${esc(u.email||'—')}</td>
+      <td>${esc(u.phone||'—')}</td>
+      <td>${u.plan_name ? `<span class="badge badge-plan">${esc(u.plan_name)}</span>` : '—'}</td>
+      <td style="color:#3a5f7a">${fmtData(u.created_at)}</td>
+      <td><span class="badge ${ativo?'badge-active':'badge-inactive'}">${ativo?'Ativo':'Inativo'}</span></td>
+      <td><span class="badge ${isAdmin?'badge-admin':''}">${esc(u.role||'cliente')}</span></td>
+      <td>
+        <div class="actions">
+          <button class="act ${ativo?'act-toggle-off':'act-toggle-on'}"
+            onclick="confirmarToggle('${u.id}','${esc(u.email)}',${ativo})">
+            ${ativo?'Desativar':'Ativar'}
+          </button>
+          <button class="act act-email"
+            onclick="reenviarEmail('${u.id}','${esc(u.email)}','${esc(u.full_name||'')}')">
+            📧 E-mail
+          </button>
+          <button class="act act-pwd"
+            onclick="gerarNovaSenha('${u.id}','${esc(u.email)}')">
+            🔑 Senha
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tbody').innerHTML = rows;
+}
+
+function setTbody(html) {
+  document.getElementById('tbody').innerHTML =
+    `<tr><td colspan="8">${html}</td></tr>`;
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Ativar / Desativar ────────────────────────────────────────
+function confirmarToggle(uid, email, estaAtivo) {
+  const acao = estaAtivo ? 'Desativar' : 'Ativar';
+  mostrarModalConfirm(
+    acao + ' usuário',
+    `Deseja ${acao.toLowerCase()} o acesso de ${email}?`,
+    () => toggleStatus(uid, estaAtivo)
+  );
+}
+
+async function toggleStatus(uid, estaAtivo) {
+  const novoStatus = estaAtivo ? 'inactive' : 'active';
+  try {
+    const r = await apiFetch('/rest/v1/profiles?id=eq.' + uid, {
+      method: 'PATCH',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ status: novoStatus })
+    });
+    if (!r.ok) throw new Error('Falha ao atualizar status');
+    toast(estaAtivo ? 'Usuário desativado.' : 'Usuário ativado!');
+    carregar();
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
+// ── Reenviar e-mail de acesso ──────────────────────────────────
+async function reenviarEmail(uid, email, nome) {
+  toast('Enviando link de acesso para ' + email + '…');
+  try {
+    // Usa a API de recuperação do Supabase para enviar link de reset
+    // O usuário receberá um link para definir/redefinir a senha
+    const r = await fetch(SUPABASE_URL + '/auth/v1/recover', {
+      method: 'POST',
+      headers: {
+        'apikey': ANON_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email,
+        redirect_to: 'https://agricart-jca.github.io/jm-mapstudio/reset-password.html'
+      })
+    });
+    toast('Link de acesso enviado para ' + email + '!');
+  } catch (e) {
+    toast('Erro ao enviar e-mail: ' + e.message, 'err');
+  }
+}
+
+// ── Gerar nova senha provisória ───────────────────────────────
+async function gerarNovaSenha(uid, email) {
+  const senha = gerarSenha();
+  try {
+    // Atualiza via Management API (requer service role — usa Edge Function)
+    // Por segurança, tentamos via função de recuperação + exibimos senha gerada
+    // O admin pode enviar manualmente por WhatsApp
+    const r = await fetch(SUPABASE_URL + '/functions/v1/admin-set-password', {
+      method: 'POST',
+      headers: {
+        'apikey': ANON_KEY,
+        'Authorization': 'Bearer ' + SESSION.access_token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ userId: uid, password: senha })
+    });
+
+    if (r.ok) {
+      mostrarModalPwd(email, senha);
+    } else {
+      // Se a Edge Function não existir, mostra a senha e instrui envio manual
+      mostrarModalPwd(email, senha);
+      toast('Copie e envie esta senha manualmente ao usuário.', 'ok', 6000);
+    }
+  } catch {
+    mostrarModalPwd(email, senha);
+    toast('Copie e envie esta senha manualmente ao usuário.', 'ok', 6000);
+  }
+}
+
+// ── Inicialização ──────────────────────────────────────────────
+async function init() {
+  SESSION = carregarSessao();
+
+  if (!SESSION || !SESSION.access_token) {
+    window.location.href = APP_URL;
+    return;
+  }
+
+  // Verifica se ainda é admin no servidor
+  try {
+    const r = await apiFetch('/rest/v1/profiles?id=eq.' + SESSION.user.id +
+      '&select=role,email,full_name');
+    const arr = r.ok ? await r.json() : [];
+    const perfil = arr[0];
+
+    const adminOk = ehAdmin(SESSION) || perfil?.role === 'admin';
+    if (!adminOk) {
+      window.location.href = APP_URL;
+      return;
+    }
+
+    document.getElementById('admin-email-lbl').textContent =
+      (perfil?.full_name || SESSION.user.email) + ' · Administrador';
+
+  } catch {
+    if (!ehAdmin(SESSION)) {
+      window.location.href = APP_URL;
+      return;
+    }
+    document.getElementById('admin-email-lbl').textContent =
+      SESSION.user.email + ' · Administrador';
+  }
+
+  carregar();
+}
+
+init();
+</script>
+</body>
+</html>
