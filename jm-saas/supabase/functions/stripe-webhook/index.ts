@@ -1,6 +1,6 @@
 // ================================================================
-// Supabase Edge Function: stripe-webhook  v2.1
-// Processa pagamentos Stripe → cria acesso → envia e-mails
+// Supabase Edge Function: stripe-webhook  v2.2
+// Processa pagamentos Stripe → cria acesso → envia e-mails (Gmail SMTP)
 // ================================================================
 // Deploy:
 //   supabase functions deploy stripe-webhook --no-verify-jwt
@@ -8,17 +8,18 @@
 // Secrets obrigatórios (Supabase Dashboard → Settings → Edge Functions):
 //   STRIPE_SECRET_KEY      — sk_live_... ou sk_test_...
 //   STRIPE_WEBHOOK_SECRET  — whsec_... (do painel Stripe → Webhooks)
-//   RESEND_API_KEY         — re_... (resend.com → API Keys)
+//   GMAIL_USER             — comercial@jmtopografiaeng.com
+//   GMAIL_APP_PASSWORD     — App Password do Gmail (sem espaços)
 //
 // Secrets opcionais (têm valores padrão):
 //   ADMIN_EMAIL            — e-mail do administrador (padrão: juancarlos.agricart@gmail.com)
 //   APP_URL                — URL da plataforma (padrão: https://agricart-jca.github.io/jm-mapstudio)
-//   RESEND_FROM            — remetente do e-mail (padrão: onboarding@resend.dev)
 // ================================================================
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Stripe from 'https://esm.sh/stripe@14?target=deno'
+import { SmtpClient } from 'https://deno.land/x/smtp@v0.7.0/mod.ts'
 
 // ── Clientes ──────────────────────────────────────────────────
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
@@ -32,11 +33,11 @@ const adminClient = createClient(
 )
 
 // ── Configuração ──────────────────────────────────────────────
-const ADMIN_EMAIL  = Deno.env.get('ADMIN_EMAIL')   ?? 'juancarlos.agricart@gmail.com'
-const APP_URL      = Deno.env.get('APP_URL')        ?? 'https://agricart-jca.github.io/jm-mapstudio'
-const RESET_URL    = `${APP_URL}/reset-password.html`
-const RESEND_KEY   = Deno.env.get('RESEND_API_KEY') ?? ''
-const RESEND_FROM  = Deno.env.get('RESEND_FROM')    ?? 'JM MapStudio <onboarding@resend.dev>'
+const ADMIN_EMAIL      = Deno.env.get('ADMIN_EMAIL')        ?? 'juancarlos.agricart@gmail.com'
+const APP_URL          = Deno.env.get('APP_URL')             ?? 'https://agricart-jca.github.io/jm-mapstudio'
+const RESET_URL        = `${APP_URL}/reset-password.html`
+const GMAIL_USER       = Deno.env.get('GMAIL_USER')          ?? 'comercial@jmtopografiaeng.com'
+const GMAIL_APP_PASS   = Deno.env.get('GMAIL_APP_PASSWORD')  ?? ''
 
 // ── Busca usuário por e-mail (com paginação completa) ─────────
 async function buscarUsuarioPorEmail(email: string): Promise<string | null> {
@@ -85,43 +86,41 @@ function gerarSenhaProvisoria(): string {
   return partes.sort(() => Math.random() - 0.5).join('')
 }
 
-// ── Envia e-mail via Resend (com retry) ───────────────────────
+// ── Envia e-mail via Gmail SMTP ───────────────────────────────
 async function enviarEmail(
   para: string,
   assunto: string,
   html: string,
   tentativas = 3
 ): Promise<boolean> {
-  if (!RESEND_KEY) {
-    console.error('[Email] RESEND_API_KEY não configurada — e-mail NÃO enviado para:', para)
+  if (!GMAIL_APP_PASS) {
+    console.error('[Email] GMAIL_APP_PASSWORD não configurada — e-mail NÃO enviado para:', para)
     return false
   }
 
   for (let t = 1; t <= tentativas; t++) {
+    const client = new SmtpClient()
     try {
-      const resp = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${RESEND_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ from: RESEND_FROM, to: para, subject: assunto, html }),
+      await client.connectTLS({
+        hostname: 'smtp.gmail.com',
+        port: 465,
+        username: GMAIL_USER,
+        password: GMAIL_APP_PASS,
       })
-
-      const resultado = await resp.json()
-
-      if (resp.ok) {
-        console.log(`[Email] ✅ Enviado para ${para} — ID: ${resultado.id}`)
-        return true
-      }
-
-      console.error(`[Email] ❌ Tentativa ${t}/${tentativas} falhou para ${para}:`, JSON.stringify(resultado))
-
-      if (t < tentativas) await new Promise(r => setTimeout(r, 1000 * t))
-
+      await client.send({
+        from: `JM MapStudio <${GMAIL_USER}>`,
+        to: para,
+        subject: assunto,
+        content: 'auto',
+        html,
+      })
+      await client.close()
+      console.log(`[Email] ✅ Enviado para ${para}`)
+      return true
     } catch (err) {
-      console.error(`[Email] ❌ Tentativa ${t}/${tentativas} — erro de rede:`, err)
-      if (t < tentativas) await new Promise(r => setTimeout(r, 1000 * t))
+      try { await client.close() } catch (_) { /* ignorar */ }
+      console.error(`[Email] ❌ Tentativa ${t}/${tentativas} falhou para ${para}:`, err)
+      if (t < tentativas) await new Promise(r => setTimeout(r, 1500 * t))
     }
   }
 
