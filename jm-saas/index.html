@@ -3102,6 +3102,23 @@ let _fundPlantas  = {};
 let _fundGeoJSON  = null;
 let _fundLoaded   = false;
 
+// Calcula área de polígono GeoJSON em km² (fórmula do excesso esférico)
+function _calcAreaKm2(geometry) {
+  const RAD = Math.PI / 180, R = 6371;
+  function ringArea(coords) {
+    let a = 0, n = coords.length;
+    for (let i = 0; i < n - 1; i++) {
+      const [lon1, lat1] = coords[i], [lon2, lat2] = coords[i + 1];
+      a += (lon2 - lon1) * RAD * (2 + Math.sin(lat1 * RAD) + Math.sin(lat2 * RAD));
+    }
+    return Math.abs(a * R * R / 2);
+  }
+  if (!geometry) return 0;
+  if (geometry.type === 'Polygon')      return ringArea(geometry.coordinates[0]);
+  if (geometry.type === 'MultiPolygon') return geometry.coordinates.reduce((s, p) => s + ringArea(p[0]), 0);
+  return 0;
+}
+
 async function initFundiario() {
   if (_fundLoaded) return;
   _fundLoaded = true;
@@ -3126,7 +3143,8 @@ async function initFundiario() {
       const p = f.properties;
       if (!p.NM_MUN)   p.NM_MUN   = p.name  || p.NM_MUNICIPIO || '';
       if (!p.CD_MUN)   p.CD_MUN   = p.id    || p.CD_MUNICIPIO || '';
-      if (!p.AREA_KM2) p.AREA_KM2 = p.area  || 0;
+      // Calcula área a partir da geometria se não vier no arquivo
+      if (!p.AREA_KM2 || p.AREA_KM2 === 0) p.AREA_KM2 = _calcAreaKm2(f.geometry);
     });
 
     if (plRes) _fundPlantas = await plRes.json().catch(() => ({}));
