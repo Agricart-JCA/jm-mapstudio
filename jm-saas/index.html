@@ -3110,12 +3110,25 @@ async function initFundiario() {
   document.getElementById('fund-instrucao').style.display = 'none';
 
   try {
+    // Fonte: geodata-br (IBGE) — municípios do RJ (código IBGE 33)
+    const RJ_GEOJSON_URL = 'https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-33-mun.json';
+
     const [gjRes, plRes] = await Promise.all([
-      fetch('./municipios_rj.geojson'),
+      fetch(RJ_GEOJSON_URL),
       fetch('./plantas.json').catch(() => null)
     ]);
 
+    if (!gjRes.ok) throw new Error(`HTTP ${gjRes.status}`);
     _fundGeoJSON = await gjRes.json();
+
+    // Normaliza propriedades para o padrão esperado (NM_MUN, CD_MUN, AREA_KM2)
+    _fundGeoJSON.features.forEach(f => {
+      const p = f.properties;
+      if (!p.NM_MUN)   p.NM_MUN   = p.name  || p.NM_MUNICIPIO || '';
+      if (!p.CD_MUN)   p.CD_MUN   = p.id    || p.CD_MUNICIPIO || '';
+      if (!p.AREA_KM2) p.AREA_KM2 = p.area  || 0;
+    });
+
     if (plRes) _fundPlantas = await plRes.json().catch(() => ({}));
 
     _fundLayer = L.geoJSON(_fundGeoJSON, {
@@ -3134,11 +3147,12 @@ async function initFundiario() {
     toast(`${total} municípios do RJ carregados`, 'ok');
 
   } catch(e) {
+    console.error('[Fundiário] Erro ao carregar municípios:', e);
     document.getElementById('fund-loading').style.display = 'none';
     document.getElementById('fund-instrucao').style.display = 'block';
-    document.getElementById('fund-contador').textContent = 'Erro ao carregar dados';
-    toast('Erro ao carregar municípios', 'warn');
-    _fundLoaded = false;
+    document.getElementById('fund-contador').textContent = 'Falha ao carregar — verifique conexão';
+    toast('Erro ao carregar municípios do RJ', 'warn');
+    _fundLoaded = false; // permite tentar novamente
   }
 }
 
