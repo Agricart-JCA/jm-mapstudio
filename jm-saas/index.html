@@ -1,4 +1,177 @@
-﻿<!DOCTYPE html>
+﻿
+// ══════════════════════════════════════════════════════
+// MÓDULO CAR / SICAR
+// WMS: geoserver.car.gov.br — sicar:sicar_imoveis_rj
+// ══════════════════════════════════════════════════════
+
+const CAR_WMS   = 'https://geoserver.car.gov.br/geoserver/sicar/wms';
+const CAR_LAYER = 'sicar:sicar_imoveis_rj';
+
+let _carActive    = false;
+let _carWmsLayer  = null;
+let _carPopup     = null;
+
+function toggleCAR() {
+  _carActive ? deactivateCAR() : activateCAR();
+}
+
+function activateCAR() {
+  _carActive = true;
+
+  // Desliga a camada de municípios
+  if (typeof _fundLayer !== 'undefined' && _fundLayer && map.hasLayer(_fundLayer)) {
+    map.removeLayer(_fundLayer);
+  }
+
+  // UI: loading
+  document.getElementById('car-loading').style.display = 'block';
+  document.getElementById('car-stats').style.display   = 'none';
+  document.getElementById('car-panel').style.display   = 'block';
+  document.getElementById('car-badge').textContent     = 'Ativo';
+  document.getElementById('car-badge').style.cssText   = 'background:rgba(39,174,96,.25);color:#27ae60;border:1px solid rgba(39,174,96,.5);padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700';
+  document.getElementById('car-dot').style.background  = '#27ae60';
+  document.getElementById('car-sub').textContent       = 'Camada ativa — clique em imóvel no mapa';
+  document.getElementById('car-card').style.border     = '1.5px solid rgba(39,174,96,.4)';
+
+  // Cria WMS tile layer (sem CORS, renderizado pelo servidor)
+  if (!_carWmsLayer) {
+    _carWmsLayer = L.tileLayer.wms(CAR_WMS, {
+      layers:      CAR_LAYER,
+      format:      'image/png',
+      transparent: true,
+      opacity:     0.85,
+      attribution: '© SICAR / Serviço Florestal Brasileiro'
+    });
+  }
+  _carWmsLayer.addTo(map);
+
+  // Mover mapa para RJ se muito afastado
+  const rjBounds = L.latLngBounds([-23.37,-44.89],[-20.76,-40.95]);
+  if (!map.getBounds().intersects(rjBounds)) {
+    map.flyToBounds(rjBounds, { duration: 1.5 });
+  }
+
+  document.getElementById('car-loading').style.display = 'none';
+  document.getElementById('car-stats').style.display   = 'block';
+
+  // Adiciona handler de clique no mapa
+  map.on('click', _carClickHandler);
+
+  toast('CAR/SICAR ativado — clique em um imóvel', 'ok');
+}
+
+function deactivateCAR() {
+  _carActive = false;
+
+  // Remove WMS
+  if (_carWmsLayer && map.hasLayer(_carWmsLayer)) map.removeLayer(_carWmsLayer);
+
+  // Remove handler
+  map.off('click', _carClickHandler);
+
+  // Fecha popup se aberto
+  if (_carPopup) { _carPopup.remove(); _carPopup = null; }
+
+  // Religa municípios se a camada fundiária estava ativa
+  if (typeof _fundLayer !== 'undefined' && _fundLayer && _fundLoaded) {
+    _fundLayer.addTo(map);
+  }
+
+  // UI reset
+  document.getElementById('car-panel').style.display   = 'none';
+  document.getElementById('car-badge').textContent     = 'Ativar';
+  document.getElementById('car-badge').style.cssText   = 'background:rgba(39,174,96,.15);color:#27ae60;border:1px solid rgba(39,174,96,.3);padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700';
+  document.getElementById('car-sub').textContent       = 'Cadastro Ambiental Rural — clique para ativar';
+  document.getElementById('car-card').style.border     = '';
+
+  toast('CAR/SICAR desativado', 'info');
+}
+
+async function _carClickHandler(e) {
+  if (!_carActive) return;
+
+  const size   = map.getSize();
+  const bounds = map.getBounds();
+  const pt     = map.latLngToContainerPoint(e.latlng);
+
+  const bbox = [
+    bounds.getWest(), bounds.getSouth(),
+    bounds.getEast(), bounds.getNorth()
+  ].join(',');
+
+  const params = new URLSearchParams({
+    SERVICE:       'WMS',
+    VERSION:       '1.1.1',
+    REQUEST:       'GetFeatureInfo',
+    FORMAT:        'image/png',
+    TRANSPARENT:   'true',
+    QUERY_LAYERS:  CAR_LAYER,
+    LAYERS:        CAR_LAYER,
+    INFO_FORMAT:   'application/json',
+    FEATURE_COUNT: '1',
+    X:             Math.round(pt.x),
+    Y:             Math.round(pt.y),
+    SRS:           'EPSG:4326',
+    WIDTH:         size.x,
+    HEIGHT:        size.y,
+    BBOX:          bbox
+  });
+
+  try {
+    const res  = await fetch(`${CAR_WMS}?${params}`);
+    const data = await res.json();
+
+    if (!data.features || data.features.length === 0) return;
+
+    const p         = data.features[0].properties;
+    const cod       = p.cod_imovel   || '—';
+    const area      = p.area         ? parseFloat(p.area).toFixed(2) + ' ha' : '—';
+    const mun       = p.municipio    || '—';
+    const tipo      = p.tipo_imovel  === 'IRU' ? 'Imóvel Rural' : (p.tipo_imovel || '—');
+    const status    = p.status_imovel || '—';
+    const condicao  = p.condicao     || '—';
+    const sicarLink = `https://www.car.gov.br/publico/imoveis/index?numero_car=${encodeURIComponent(cod)}`;
+
+    const statusColor = status === 'AT' ? '#27ae60' : status === 'SU' ? '#e74c3c' : '#f39c12';
+
+    if (_carPopup) _carPopup.remove();
+
+    _carPopup = L.popup({ maxWidth: 260, className: 'car-popup' })
+      .setLatLng(e.latlng)
+      .setContent(`
+        <div style="font-family:-apple-system,sans-serif;font-size:12px">
+          <div style="font-weight:800;font-size:13px;margin-bottom:8px;color:#1a1a2e">🌿 Imóvel CAR</div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <tr><td style="color:#666;padding:3px 0;width:70px">Código</td>
+                <td style="font-weight:600;word-break:break-all;font-size:10px">${cod}</td></tr>
+            <tr><td style="color:#666;padding:3px 0">Município</td>
+                <td style="font-weight:600">${mun}</td></tr>
+            <tr><td style="color:#666;padding:3px 0">Área</td>
+                <td style="font-weight:600">${area}</td></tr>
+            <tr><td style="color:#666;padding:3px 0">Tipo</td>
+                <td style="font-weight:600">${tipo}</td></tr>
+            <tr><td style="color:#666;padding:3px 0">Situação</td>
+                <td><span style="background:${statusColor}22;color:${statusColor};padding:1px 7px;border-radius:10px;font-weight:700;font-size:10px">${condicao}</span></td></tr>
+          </table>
+          <a href="${sicarLink}" target="_blank"
+             style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:10px;padding:8px;background:#c0392b;color:#fff;border-radius:7px;text-decoration:none;font-weight:700;font-size:11px">
+            🔗 Ver no SICAR ↗
+          </a>
+        </div>`)
+      .openOn(map);
+
+  } catch(err) {
+    // CORS ou erro de rede — popup simples com link direto
+    if (_carPopup) _carPopup.remove();
+    _carPopup = L.popup({ maxWidth: 220 })
+      .setLatLng(e.latlng)
+      .setContent(`<b>Imóvel CAR</b><br><small style="color:#888">Não foi possível carregar detalhes.<br>Consulte diretamente no SICAR:</small><br>
+        <a href="https://www.car.gov.br/publico/imoveis/index" target="_blank"
+           style="color:#c0392b;font-weight:700;font-size:11px">🔗 Portal SICAR ↗</a>`)
+      .openOn(map);
+  }
+}
+</script> html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -1730,7 +1903,32 @@ html { scroll-behavior: smooth; }
     <!-- Camadas futuras -->
     <div style="padding:0 12px 16px;display:flex;flex-direction:column;gap:6px;flex-shrink:0">
       <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Próximas integrações</div>
-      <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#27ae60"></div><div><div class="fund-card-title">CAR / SICAR</div><div class="fund-card-sub">Cadastro Ambiental Rural</div></div><div class="fund-card-badge fund-badge-breve">Em breve</div></div></div>
+      <div class="fund-card" id="car-card" onclick="toggleCAR()" style="cursor:pointer;transition:all .18s">
+  <div class="fund-card-header">
+    <div class="fund-card-dot" id="car-dot" style="background:#27ae60"></div>
+    <div style="flex:1">
+      <div class="fund-card-title">CAR / SICAR</div>
+      <div class="fund-card-sub" id="car-sub">Cadastro Ambiental Rural — clique para ativar</div>
+    </div>
+    <div id="car-badge" class="fund-card-badge" style="background:rgba(39,174,96,.15);color:#27ae60;border:1px solid rgba(39,174,96,.3)">Ativar</div>
+  </div>
+  <!-- Painel CAR expandido -->
+  <div id="car-panel" style="display:none;padding:10px 0 4px;border-top:1px solid rgba(255,255,255,.06);margin-top:10px">
+    <div id="car-loading" style="display:none;font-size:11px;color:var(--sub);padding:4px 0">Carregando camada…</div>
+    <div id="car-stats" style="display:none">
+      <div style="font-size:10px;color:var(--sub);margin-bottom:8px" id="car-info-txt">Camada WMS ativa — clique em um imóvel</div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:10px">
+        <div style="display:flex;align-items:center;gap:6px"><div style="width:10px;height:10px;border-radius:2px;background:#27ae60;flex-shrink:0"></div><span style="color:var(--sub)">Ativo (AT)</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><div style="width:10px;height:10px;border-radius:2px;background:#f39c12;flex-shrink:0"></div><span style="color:var(--sub)">Pendente análise</span></div>
+        <div style="display:flex;align-items:center;gap:6px"><div style="width:10px;height:10px;border-radius:2px;background:#e74c3c;flex-shrink:0"></div><span style="color:var(--sub)">Suspenso/Cancelado</span></div>
+      </div>
+      <a href="https://www.car.gov.br/publico/imoveis/index" target="_blank"
+         style="display:flex;align-items:center;gap:6px;margin-top:10px;padding:7px 10px;background:rgba(39,174,96,.1);border:1px solid rgba(39,174,96,.25);border-radius:7px;color:#27ae60;text-decoration:none;font-size:11px;font-weight:700">
+        🔗 Portal SICAR Oficial ↗
+      </a>
+    </div>
+  </div>
+</div>
       <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#2980b9"></div><div><div class="fund-card-title">SIGEF / INCRA</div><div class="fund-card-sub">Georreferenciamento de imóveis rurais</div></div><div class="fund-card-badge fund-badge-breve">Em breve</div></div></div>
       <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#8e44ad"></div><div><div class="fund-card-title">Áreas de Proteção</div><div class="fund-card-sub">APA, UC — SNUC/IBAMA</div></div><div class="fund-card-badge fund-badge-breve">Em breve</div></div></div>
     </div>
