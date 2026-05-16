@@ -36,17 +36,32 @@ serve(async (req) => {
     )
     const { data: { user } } = await supabase.auth.getUser()
 
-    const params: Stripe.Checkout.SessionCreateParams = {
-      mode: 'subscription',
-      payment_method_types: ['card'],
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: successUrl || `${req.headers.get('origin')}?checkout=success`,
-      cancel_url:  cancelUrl  || `${req.headers.get('origin')}?checkout=cancel`,
-      locale: 'pt-BR',
-      allow_promotion_codes: true,
-    }
+    const { metodo } = body as { metodo?: string }
+    const usePix = metodo === 'pix'
 
-    // Se usuário já tem conta, pré-preencher email
+    const params: Stripe.Checkout.SessionCreateParams = usePix
+      ? {
+          // PIX = pagamento único (1 mês de acesso manual)
+          mode: 'payment',
+          payment_method_types: ['pix'],
+          line_items: [{ price: priceId, quantity: 1 }],
+          success_url: successUrl || `${req.headers.get('origin')}?checkout=success`,
+          cancel_url:  cancelUrl  || `${req.headers.get('origin')}?checkout=cancel`,
+          locale: 'pt-BR',
+          payment_intent_data: { description: 'JM MapStudio — Acesso Mensal via PIX' },
+        }
+      : {
+          // Cartão = assinatura recorrente
+          mode: 'subscription',
+          payment_method_types: ['card'],
+          line_items: [{ price: priceId, quantity: 1 }],
+          success_url: successUrl || `${req.headers.get('origin')}?checkout=success`,
+          cancel_url:  cancelUrl  || `${req.headers.get('origin')}?checkout=cancel`,
+          locale: 'pt-BR',
+          allow_promotion_codes: true,
+        }
+
+    // Pré-preenche email se usuário logado
     if (user?.email) params.customer_email = user.email
 
     const session = await stripe.checkout.sessions.create(params)

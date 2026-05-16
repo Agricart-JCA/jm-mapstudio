@@ -1017,11 +1017,35 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
           </div>
         </div>
       </div>
-      <div id="pricing-err" class="lf-msg-err" style="margin-top:10px"></div>
-      <p style="margin-top:14px;text-align:center;font-size:11px;color:var(--sub)">
-        Pagamento seguro via <strong style="color:var(--text)">Stripe</strong> · Cartão de crédito
+      <!-- Separador PIX -->
+      <div style="display:flex;align-items:center;gap:8px;margin:14px 0 10px">
+        <div style="flex:1;height:1px;background:var(--border2)"></div>
+        <span style="font-size:10px;color:var(--dim);font-weight:600">ou pague com</span>
+        <div style="flex:1;height:1px;background:var(--border2)"></div>
+      </div>
+      <!-- PIX -->
+      <div class="price-card" id="card-pix" onclick="startCheckout('mensal','pix')"
+           style="border-color:rgba(50,180,100,.3);background:rgba(50,180,100,.05)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:22px">⚡</span>
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--text)">PIX</div>
+              <div style="font-size:10px;color:var(--sub);margin-top:1px">Pagamento instantâneo · 1 mês de acesso</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div id="price-pix-val" style="font-size:18px;font-weight:900;color:#27ae60">R$ —</div>
+            <div style="font-size:9px;color:var(--sub)">à vista</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pricing-err" style="margin-top:10px;font-size:12px;color:var(--sub);text-align:center;min-height:18px"></div>
+      <p style="margin-top:12px;text-align:center;font-size:11px;color:var(--dim)">
+        🔒 Pagamento seguro via <strong style="color:var(--text)">Stripe</strong> · Cartão ou PIX
       </p>
-      <p style="margin-top:8px;text-align:center">
+      <p style="margin-top:6px;text-align:center">
         <a href="#" class="lf-back-link" onclick="event.preventDefault();showLoginStep()">← Voltar ao login</a>
       </p>
     </div>
@@ -1627,8 +1651,10 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const STRIPE_PRICE_MENSAL = 'price_1TWnanDGXf3C25blhlHTprMd';
 const STRIPE_PRICE_ANUAL  = 'price_1TWnanDGXf3C25blhlHTprMd';
+const STRIPE_PRICE_PIX    = 'price_1TWnanDGXf3C25blhlHTprMd'; // ⚠️ substituir pelo price ID do produto PIX (one-time)
 const PRECO_MENSAL = 'R$ 1,00';
 const PRECO_ANUAL  = 'R$ 1,00';
+const PRECO_PIX    = 'R$ 1,00';
 
 const CHECKOUT_FN_URL = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/create-checkout';
 const INVITE_FN_URL   = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/invite-user';
@@ -1696,12 +1722,20 @@ async function initAuth() {
     window.history.replaceState({}, '', window.location.pathname);
     window._checkoutReturn = true;
   }
+  // Bug50 fix: só entra como visitante se não houver sessão autenticada ativa
   if (params.get('lat') && params.get('lon')) {
-    entrarComoVisitante(params.get('n') || 'Visitante');
-    return;
+    const sessCheck = getSession();
+    const hasValidSess = sessCheck?.access_token && _jwtExp(sessCheck.access_token) > Date.now();
+    if (!hasValidSess) {
+      entrarComoVisitante(params.get('n') || 'Visitante');
+      return;
+    }
+    // tem sessão — continua fluxo normal (applySession vai liberar o sistema)
   }
   document.getElementById('price-mensal-val').textContent = PRECO_MENSAL;
   document.getElementById('price-anual-val').textContent  = PRECO_ANUAL;
+  const pixEl = document.getElementById('price-pix-val');
+  if (pixEl) pixEl.textContent = PRECO_PIX;
 
   // Detectar link de redefinição de senha (recovery)
   const hash = new URLSearchParams(window.location.hash.replace('#',''));
@@ -1730,8 +1764,12 @@ async function initAuth() {
   }
 
   // Callback OAuth Google — token vem no hash sem type=recovery
-  if (hash.get('access_token') && hash.get('token_type') === 'bearer') {
-    const s = { access_token: hash.get('access_token'), refresh_token: hash.get('refresh_token') };
+  if (hash.get('access_token') && (hash.get('token_type')||'').toLowerCase() === 'bearer') {
+    const s = {
+      access_token:  hash.get('access_token'),
+      refresh_token: hash.get('refresh_token') || null, // Bug16: pode ser null em alguns provedores
+    };
+    if (!s.refresh_token) console.warn('[Auth] OAuth sem refresh_token — sessão não renovável automaticamente');
     setSession(s);
     window.history.replaceState({}, '', window.location.pathname);
     scheduleTokenRefresh(s.access_token);
@@ -2021,10 +2059,16 @@ async function doForcedChangePwd() {
     const data = await resp.json().catch(()=>({}));
 
     if (resp.ok) {
-      // Limpa flag must_change_password no banco
+      // Bug43 fix: retry até 3x para evitar loop infinito de troca obrigatória
       const uid = _forcedUserId || data.id;
       if (uid) {
-        await sbPatch(`/rest/v1/profiles?id=eq.${uid}`,{must_change_password:false},token);
+        let cleared = false;
+        for (let attempt = 1; attempt <= 3 && !cleared; attempt++) {
+          const st = await sbPatch(`/rest/v1/profiles?id=eq.${uid}`,{must_change_password:false},token);
+          cleared = st < 300;
+          if (!cleared && attempt < 3) await new Promise(r => setTimeout(r, 800));
+        }
+        if (!cleared) console.error('[Senha] Falha ao limpar must_change_password após 3 tentativas — userId:', uid);
       }
       // Remove guard de visibilidade
       document.removeEventListener('visibilitychange', _forceVisibilityGuard);
@@ -2284,12 +2328,27 @@ async function doRegister() {
 
     if (data?.access_token) {
       setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
-      // Atualizar perfil com telefone (trigger já cria com name)
-      await fetch(SUPABASE_URL + '/rest/v1/profiles?id=eq.' + data.user.id, {
-        method: 'PATCH',
-        headers: { ...sbH(data.access_token), 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ phone: tel, status: 'pending' })
-      }).catch(() => {});
+      // Bug26 fix: valida user.id antes do PATCH
+      const userId = data?.user?.id;
+      if (userId) {
+        // Bug25 fix: tenta até 2 vezes com log de falha
+        const patchOk = await fetch(SUPABASE_URL + '/rest/v1/profiles?id=eq.' + userId, {
+          method: 'PATCH',
+          headers: { ...sbH(data.access_token), 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ phone: tel, status: 'pending' })
+        }).then(r => r.ok).catch(() => false);
+        if (!patchOk) {
+          // Segunda tentativa após 1s
+          await new Promise(r => setTimeout(r, 1000));
+          await fetch(SUPABASE_URL + '/rest/v1/profiles?id=eq.' + userId, {
+            method: 'PATCH',
+            headers: { ...sbH(data.access_token), 'Prefer': 'return=minimal' },
+            body: JSON.stringify({ phone: tel, status: 'pending' })
+          }).catch(() => console.warn('[Cadastro] PATCH perfil falhou após 2 tentativas'));
+        }
+      } else {
+        console.warn('[Cadastro] user.id ausente no retorno do signup — perfil não atualizado');
+      }
       showPricingStep();
     } else {
       // Supabase pode exigir confirmação de email (depende da config)
@@ -2302,22 +2361,47 @@ async function doRegister() {
     btn.disabled = false; btn.textContent = 'Criar conta e escolher plano';
   }
 }
-async function startCheckout(plan) {
+async function startCheckout(plan, metodo='card') {
   const priceId = plan==='anual' ? STRIPE_PRICE_ANUAL : STRIPE_PRICE_MENSAL;
   const errEl   = document.getElementById('pricing-err');
-  errEl.textContent='Redirecionando para o pagamento...';
+  if (!errEl) return;
+
+  // Bug32 fix: sessão obrigatória para vincular email ao checkout
+  const sess = getSession();
+  if (!sess?.access_token) {
+    errEl.textContent = 'Faça login antes de assinar.';
+    setTimeout(showLoginStep, 1500);
+    return;
+  }
+
+  errEl.textContent = 'Redirecionando para o pagamento...';
+  errEl.style.color = 'var(--sub)';
+
+  // Bug34 fix: try/catch completo com feedback ao usuário
   try {
-    const sess = getSession();
-    const headers = {'Content-Type':'application/json', 'Authorization':'Bearer '+(sess?.access_token||SUPABASE_ANON_KEY)};
-    const res  = await fetch(CHECKOUT_FN_URL,{method:'POST',headers,body:JSON.stringify({
-      priceId,
-      successUrl: window.location.origin+window.location.pathname+'?checkout=success',
-      cancelUrl:  window.location.origin+window.location.pathname+'?checkout=cancel'
-    })});
+    const headers = {'Content-Type':'application/json','Authorization':'Bearer '+sess.access_token};
+    const res = await fetch(CHECKOUT_FN_URL, {
+      method: 'POST', headers,
+      body: JSON.stringify({
+        priceId, metodo,
+        successUrl: window.location.origin+window.location.pathname+'?checkout=success',
+        cancelUrl:  window.location.origin+window.location.pathname+'?checkout=cancel'
+      })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    if (data.url) window.location.href=data.url;
-    else errEl.textContent='Erro ao iniciar checkout. Tente novamente.';
-  } catch(e) { errEl.textContent='Erro de conexão. Tente novamente.'; }
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      errEl.style.color = '#e74c3c';
+      errEl.textContent = data.error || 'Erro ao iniciar checkout. Tente novamente.';
+    }
+  } catch(e) {
+    errEl.style.color = '#e74c3c';
+    errEl.textContent = e.message?.includes('fetch')
+      ? 'Sem conexão. Verifique sua internet e tente novamente.'
+      : 'Erro ao processar pagamento. Tente novamente.';
+  }
 }
 
 // ── Admin panel ────────────────────────────────
