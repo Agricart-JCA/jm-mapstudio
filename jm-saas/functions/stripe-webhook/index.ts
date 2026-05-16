@@ -311,9 +311,10 @@ async function salvarPerfil(
   nome: string,
   telefone: string,
   customerId: string,
-  plano: string
+  plano: string,
+  isNewUser: boolean = false
 ) {
-  const { error } = await adminClient.from('profiles').upsert({
+  const payload: Record<string, unknown> = {
     id:                 userId,
     email,
     name:               nome || email.split('@')[0],
@@ -323,7 +324,13 @@ async function salvarPerfil(
     status:             'active',
     subscribed_at:      new Date().toISOString(),
     updated_at:         new Date().toISOString(),
-  }, { onConflict: 'id' })
+  }
+  // Só seta must_change_password=true para usuários NOVOS
+  // Usuários existentes já têm sua própria senha
+  if (isNewUser) {
+    payload.must_change_password = true
+  }
+  const { error } = await adminClient.from('profiles').upsert(payload, { onConflict: 'id' })
 
   if (error) {
     console.error('[DB] Erro ao salvar perfil:', error.message)
@@ -481,7 +488,7 @@ async function processarEvento(evento: Stripe.Event) {
       }
 
       // ── Salvar dados no banco ────────────────────────────────
-      await salvarPerfil(userId, email, nome, telefone, customerId, plano)
+      await salvarPerfil(userId, email, nome, telefone, customerId, plano, statusCriacao === 'criado')
       await salvarAssinatura(sub!, userId, priceId)
 
       // ── Enviar e-mail ao comprador ───────────────────────────

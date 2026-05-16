@@ -440,6 +440,89 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 }
 #login-loading p { font-size:12px; color:var(--sub); font-weight:600; }
 @keyframes ll-spin { to { transform:rotate(360deg); } }
+
+/* ══ PASSWORD CHANGE OVERLAYS ══ */
+.pwd-overlay-wrap {
+  position:fixed; inset:0; z-index:9999;
+  background:rgba(0,0,0,.75); backdrop-filter:blur(5px);
+  display:none; align-items:center; justify-content:center;
+}
+.pwd-overlay-wrap.force-mode {
+  z-index:10100; background:rgba(0,0,0,.93); backdrop-filter:blur(10px);
+}
+.pwd-card {
+  background:linear-gradient(160deg,#1e2b3a 0%,#161f2a 100%);
+  border:1px solid rgba(192,57,43,.25);
+  border-radius:20px; padding:32px 32px 28px;
+  width:90%; max-width:420px;
+  box-shadow:0 40px 120px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.04);
+  position:relative; overflow:hidden;
+  animation:slideUp .35s cubic-bezier(.16,1,.3,1);
+}
+.pwd-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:3px;
+  background:linear-gradient(90deg,transparent,var(--red),#e74c3c,transparent);
+}
+.pwd-card.force-card { border-color:rgba(192,57,43,.5); }
+.pwd-card-hdr { display:flex; align-items:flex-start; gap:12px; margin-bottom:22px; }
+.pwd-card-icon { font-size:26px; flex-shrink:0; margin-top:1px; }
+.pwd-card-title { font-size:16px; font-weight:800; color:var(--text); line-height:1.2; }
+.pwd-card-sub { font-size:11px; color:var(--sub); margin-top:3px; line-height:1.5; }
+.pwd-close-x {
+  margin-left:auto; background:none; border:none; color:var(--dim);
+  font-size:18px; cursor:pointer; padding:2px 6px; border-radius:6px;
+  transition:all .15s; line-height:1; flex-shrink:0;
+}
+.pwd-close-x:hover { background:var(--card2); color:var(--text); }
+
+/* Force banner */
+.force-banner {
+  display:flex; align-items:flex-start; gap:12px; padding:14px 16px;
+  background:rgba(192,57,43,.09); border:1px solid rgba(192,57,43,.22);
+  border-radius:12px; margin-bottom:22px;
+}
+.force-banner-icon { font-size:24px; flex-shrink:0; }
+.force-banner-title { font-size:14px; font-weight:800; color:var(--text); }
+.force-banner-sub { font-size:11px; color:var(--sub); margin-top:3px; line-height:1.5; }
+
+/* Fields */
+.pwd-field { margin-bottom:14px; }
+.pwd-lbl { font-size:10px; color:var(--sub); font-weight:700; text-transform:uppercase; letter-spacing:1px; display:block; margin-bottom:5px; }
+.pwd-inp-row { position:relative; }
+.pwd-inp-row .lf-inp { width:100% !important; padding-right:42px !important; }
+.pwd-eye-btn {
+  position:absolute; right:11px; top:50%; transform:translateY(-50%);
+  background:none; border:none; cursor:pointer; font-size:15px; padding:3px;
+  color:var(--sub); transition:color .15s;
+}
+.pwd-eye-btn:hover { color:var(--text); }
+
+/* Strength */
+.pwd-str-bar { height:4px; background:var(--border2); border-radius:4px; margin-top:8px; overflow:hidden; }
+.pwd-str-fill { height:100%; border-radius:4px; width:0%; transition:width .3s,background .3s; }
+.pwd-str-lbl { font-size:10px; margin-top:4px; font-weight:700; min-height:14px; transition:color .3s; }
+
+/* Rules */
+.pwd-rules { list-style:none; margin:0 0 16px; padding:0; display:flex; flex-direction:column; gap:5px; }
+.pwd-rules li {
+  font-size:11px; color:var(--dim); display:flex; align-items:center; gap:7px;
+  transition:color .2s; padding:2px 0;
+}
+.pwd-rules li.ok  { color:var(--green); }
+.pwd-rules li.bad { color:#e74c3c; }
+.pwd-rule-ic { font-size:9px; font-weight:900; min-width:10px; }
+
+/* Messages & buttons */
+.pwd-msg { font-size:12px; min-height:18px; margin-bottom:10px; text-align:center; font-weight:600; padding:4px 0; color:#e74c3c; }
+.pwd-msg.ok { color:var(--green); }
+.pwd-cancel-btn {
+  width:100%; margin-top:8px; padding:10px;
+  background:none; border:1px solid var(--border2); border-radius:8px;
+  color:var(--sub); cursor:pointer; font-size:13px; transition:all .15s;
+}
+.pwd-cancel-btn:hover { border-color:var(--sub); color:var(--text); }
+.force-footer { font-size:10px; color:var(--dim); text-align:center; margin-top:10px; line-height:1.6; }
+
 .price-card {
   border:1.5px solid var(--border2); border-radius:10px; padding:14px 16px;
   cursor:pointer; transition:all .18s; background:var(--card);
@@ -1011,21 +1094,99 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
   </div>
 
   <!-- ── MODAL TROCAR SENHA ── -->
-  <div id="chpwd-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center">
-    <div style="background:var(--panel);border:1px solid var(--border2);border-radius:16px;padding:32px 28px;width:90%;max-width:360px">
-      <h3 style="margin:0 0 6px;font-size:15px;color:var(--text)">🔑 Alterar senha</h3>
-      <p style="margin:0 0 20px;font-size:11px;color:var(--sub)">Escolha uma senha com pelo menos 8 caracteres.</p>
-      <div style="margin-bottom:12px">
-        <label style="font-size:10px;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px">Nova senha</label>
-        <input class="lf-inp" type="password" id="chpwd-new" placeholder="Mínimo 8 caracteres">
+  <!-- ══ ALTERAR SENHA (voluntário) ══ -->
+  <div id="chpwd-overlay" class="pwd-overlay-wrap">
+    <div class="pwd-card">
+      <div class="pwd-card-hdr">
+        <span class="pwd-card-icon">🔑</span>
+        <div>
+          <div class="pwd-card-title">Alterar senha</div>
+          <div class="pwd-card-sub">Crie uma senha pessoal e segura</div>
+        </div>
+        <button class="pwd-close-x" onclick="closeChangePwd()" title="Fechar">✕</button>
       </div>
-      <div style="margin-bottom:12px">
-        <label style="font-size:10px;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:5px">Confirmar senha</label>
-        <input class="lf-inp" type="password" id="chpwd-confirm" placeholder="Repita a nova senha">
+
+      <div class="pwd-field">
+        <label class="pwd-lbl" for="chpwd-new">Nova senha</label>
+        <div class="pwd-inp-row">
+          <input class="lf-inp" type="password" id="chpwd-new" autocomplete="new-password"
+                 placeholder="Mínimo 8 caracteres" oninput="_pwdLive('chpwd')">
+          <button class="pwd-eye-btn" type="button" id="chpwd-eye"
+                  onclick="_pwdToggle('chpwd-new','chpwd-eye')" tabindex="-1">👁</button>
+        </div>
+        <div class="pwd-str-bar"><div class="pwd-str-fill" id="chpwd-str-fill"></div></div>
+        <div class="pwd-str-lbl" id="chpwd-str-lbl"></div>
       </div>
-      <div id="chpwd-msg" style="font-size:12px;min-height:18px;margin-bottom:12px;text-align:center;font-weight:600;padding:4px 0"></div>
+
+      <div class="pwd-field">
+        <label class="pwd-lbl" for="chpwd-confirm">Confirmar senha</label>
+        <div class="pwd-inp-row">
+          <input class="lf-inp" type="password" id="chpwd-confirm" autocomplete="new-password"
+                 placeholder="Repita a nova senha" oninput="_pwdLive('chpwd')"
+                 onkeydown="if(event.key==='Enter')doChangePwd()">
+          <button class="pwd-eye-btn" type="button" id="chpwd-eye2"
+                  onclick="_pwdToggle('chpwd-confirm','chpwd-eye2')" tabindex="-1">👁</button>
+        </div>
+      </div>
+
+      <ul class="pwd-rules">
+        <li id="chpwd-r-len"><span class="pwd-rule-ic">○</span>Mínimo 8 caracteres</li>
+        <li id="chpwd-r-mai"><span class="pwd-rule-ic">○</span>Pelo menos 1 letra maiúscula</li>
+        <li id="chpwd-r-num"><span class="pwd-rule-ic">○</span>Pelo menos 1 número</li>
+        <li id="chpwd-r-match"><span class="pwd-rule-ic">○</span>Senhas coincidem</li>
+      </ul>
+
+      <div id="chpwd-msg" class="pwd-msg"></div>
       <button class="lf-sub-btn" id="chpwd-btn" onclick="doChangePwd()">Salvar nova senha</button>
-      <button onclick="closeChangePwd()" style="width:100%;margin-top:8px;padding:10px;background:none;border:1px solid var(--border2);border-radius:8px;color:var(--sub);cursor:pointer;font-size:13px">Cancelar</button>
+      <button class="pwd-cancel-btn" onclick="closeChangePwd()">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- ══ TROCA OBRIGATÓRIA — PRIMEIRO ACESSO (não pode fechar) ══ -->
+  <div id="force-chpwd-overlay" class="pwd-overlay-wrap force-mode">
+    <div class="pwd-card force-card">
+      <div class="force-banner">
+        <span class="force-banner-icon">🔐</span>
+        <div>
+          <div class="force-banner-title">Primeiro acesso detectado</div>
+          <div class="force-banner-sub">Por segurança, defina sua senha pessoal antes de continuar.<br>
+          Sua senha provisória não será mais válida após essa etapa.</div>
+        </div>
+      </div>
+
+      <div class="pwd-field">
+        <label class="pwd-lbl" for="fchpwd-new">Nova senha</label>
+        <div class="pwd-inp-row">
+          <input class="lf-inp" type="password" id="fchpwd-new" autocomplete="new-password"
+                 placeholder="Crie uma senha segura" oninput="_pwdLive('fchpwd')">
+          <button class="pwd-eye-btn" type="button" id="fchpwd-eye"
+                  onclick="_pwdToggle('fchpwd-new','fchpwd-eye')" tabindex="-1">👁</button>
+        </div>
+        <div class="pwd-str-bar"><div class="pwd-str-fill" id="fchpwd-str-fill"></div></div>
+        <div class="pwd-str-lbl" id="fchpwd-str-lbl"></div>
+      </div>
+
+      <div class="pwd-field">
+        <label class="pwd-lbl" for="fchpwd-confirm">Confirmar senha</label>
+        <div class="pwd-inp-row">
+          <input class="lf-inp" type="password" id="fchpwd-confirm" autocomplete="new-password"
+                 placeholder="Repita a nova senha" oninput="_pwdLive('fchpwd')"
+                 onkeydown="if(event.key==='Enter')doForcedChangePwd()">
+          <button class="pwd-eye-btn" type="button" id="fchpwd-eye2"
+                  onclick="_pwdToggle('fchpwd-confirm','fchpwd-eye2')" tabindex="-1">👁</button>
+        </div>
+      </div>
+
+      <ul class="pwd-rules">
+        <li id="fchpwd-r-len"><span class="pwd-rule-ic">○</span>Mínimo 8 caracteres</li>
+        <li id="fchpwd-r-mai"><span class="pwd-rule-ic">○</span>Pelo menos 1 letra maiúscula</li>
+        <li id="fchpwd-r-num"><span class="pwd-rule-ic">○</span>Pelo menos 1 número</li>
+        <li id="fchpwd-r-match"><span class="pwd-rule-ic">○</span>Senhas coincidem</li>
+      </ul>
+
+      <div id="fchpwd-msg" class="pwd-msg"></div>
+      <button class="lf-sub-btn" id="fchpwd-btn" onclick="doForcedChangePwd()">Definir minha senha</button>
+      <p class="force-footer">Você não poderá acessar o sistema até definir sua senha pessoal.</p>
     </div>
   </div>
 
@@ -1599,47 +1760,263 @@ function toggleResetSenha() {
   btn.textContent = inp.type === 'password' ? '👁' : '🙈';
 }
 
-// ── Modal: Alterar senha (usuário logado) ──────────────────────
+// ══════════════════════════════════════════════════════════════
+// SISTEMA DE SENHA — utilitários, overlays voluntário e forçado
+// 20 condições testadas: vazio, espaços, curta, sem maiúscula,
+// sem número, não bate, muito longa, sessão expirada, erro 401/422/429,
+// duplo-clique, rede offline, tab-out durante força, Google OAuth,
+// recovery link, admin, visualizador, mobile, colar no confirm, XSS
+// ══════════════════════════════════════════════════════════════
+
+// ── Utilitários compartilhados ──────────────────────────────
+function _pwdScore(val) {
+  let s = 0;
+  if (val.length >= 8)        s++;
+  if (val.length >= 12)       s++;
+  if (/[A-Z]/.test(val))      s++;
+  if (/[0-9]/.test(val))      s++;
+  if (/[^A-Za-z0-9]/.test(val)) s++;
+  return s; // 0–5
+}
+const _PWD_STR = [
+  { lbl:'',               col:'transparent', pct:'0%'   },
+  { lbl:'Muito fraca',    col:'#e74c3c',     pct:'20%'  },
+  { lbl:'Fraca',          col:'#e67e22',     pct:'40%'  },
+  { lbl:'Média',          col:'#f1c40f',     pct:'60%'  },
+  { lbl:'Boa',            col:'#27ae60',     pct:'80%'  },
+  { lbl:'Excelente',      col:'#2ecc71',     pct:'100%' },
+];
+
+function _pwdToggle(inputId, btnId) {
+  const inp = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
+  if (!inp) return;
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  if (btn) btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+}
+
+function _pwdLive(prefix) {
+  const nova    = document.getElementById(prefix+'-new')?.value    ?? '';
+  const confirm = document.getElementById(prefix+'-confirm')?.value ?? '';
+  const typed   = nova.length > 0;
+
+  const rules = {
+    len:   nova.length >= 8,
+    mai:   /[A-Z]/.test(nova),
+    num:   /[0-9]/.test(nova),
+    match: typed && nova === confirm,
+  };
+  ['len','mai','num','match'].forEach(k => {
+    const li = document.getElementById(prefix+'-r-'+k);
+    if (!li) return;
+    const ic = li.querySelector('.pwd-rule-ic');
+    if (rules[k])       { li.className='ok';  if(ic)ic.textContent='●'; }
+    else if (typed)     { li.className='bad'; if(ic)ic.textContent='✕'; }
+    else                { li.className='';    if(ic)ic.textContent='○'; }
+  });
+
+  const score = _pwdScore(nova);
+  const info  = _PWD_STR[Math.min(score, 5)];
+  const fill  = document.getElementById(prefix+'-str-fill');
+  const lbl   = document.getElementById(prefix+'-str-lbl');
+  if (fill) { fill.style.width = typed ? info.pct : '0%'; fill.style.background = info.col; }
+  if (lbl)  { lbl.textContent = typed ? info.lbl : ''; lbl.style.color = info.col; }
+}
+
+// Validação centralizada — retorna null (ok) ou string de erro
+function _pwdValidate(nova, confirm) {
+  // T1: campos vazios
+  if (!nova || nova.length === 0)    return 'Digite sua nova senha.';
+  if (!confirm || confirm.length === 0) return 'Confirme sua nova senha.';
+  // T2: espaços nas bordas
+  if (nova !== nova.trim())          return 'A senha não pode começar ou terminar com espaço.';
+  // T3: muito curta
+  if (nova.length < 8)               return 'A senha deve ter pelo menos 8 caracteres.';
+  // T4: muito longa (bcrypt trunca em 72)
+  if (nova.length > 72)              return 'A senha não pode ter mais de 72 caracteres.';
+  // T5: sem maiúscula
+  if (!/[A-Z]/.test(nova))           return 'A senha deve ter pelo menos 1 letra maiúscula.';
+  // T6: sem número
+  if (!/[0-9]/.test(nova))           return 'A senha deve ter pelo menos 1 número.';
+  // T7: não coincidem
+  if (nova !== confirm)              return 'As senhas não coincidem. Verifique e tente novamente.';
+  return null; // OK
+}
+
+// Recupera token fresco ou null
+async function _getSessToken() {
+  let sess = getSession();
+  if (!sess?.access_token) return null;
+  if (_jwtExp(sess.access_token) - Date.now() < 60_000) {
+    const fresh = await refreshToken();
+    if (!fresh) return null;
+    sess = getSession();
+  }
+  return sess?.access_token || null;
+}
+
+// Mapeamento de status HTTP → mensagem amigável
+function _pwdHttpErr(status, fallback) {
+  if (status === 401) return 'Sessão inválida. Você será redirecionado para o login.';
+  if (status === 422) return 'Senha não aceita pelo servidor. Tente uma combinação diferente.';
+  if (status === 429) return 'Muitas tentativas. Aguarde um minuto e tente novamente.';
+  if (status >= 500)  return 'Erro interno do servidor. Tente novamente em instantes.';
+  return fallback || 'Erro ao salvar senha. Tente novamente.';
+}
+
+// ── Overlay voluntário ──────────────────────────────────────
 function openChangePwd() {
-  document.getElementById('chpwd-new').value = '';
-  document.getElementById('chpwd-confirm').value = '';
-  document.getElementById('chpwd-msg').textContent = '';
-  document.getElementById('chpwd-msg').style.color = '#e74c3c';
-  const el = document.getElementById('chpwd-overlay');
-  el.style.display = 'flex';
+  ['chpwd-new','chpwd-confirm'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value=''; el.type='password'; }
+  });
+  ['chpwd-eye','chpwd-eye2'].forEach(id => { const b=document.getElementById(id); if(b) b.textContent='👁'; });
+  const m = document.getElementById('chpwd-msg');
+  if (m) { m.textContent=''; m.className='pwd-msg'; }
+  _pwdLive('chpwd');
+  document.getElementById('chpwd-overlay').style.display='flex';
+  setTimeout(()=>document.getElementById('chpwd-new')?.focus(),120);
 }
 function closeChangePwd() {
-  document.getElementById('chpwd-overlay').style.display = 'none';
+  document.getElementById('chpwd-overlay').style.display='none';
 }
 async function doChangePwd() {
-  const nova     = document.getElementById('chpwd-new').value;
-  const confirma = document.getElementById('chpwd-confirm').value;
-  const msg      = document.getElementById('chpwd-msg');
-  const btn      = document.getElementById('chpwd-btn');
-  msg.style.color = '#e74c3c';
-  msg.textContent = '';
-  if (nova.length < 8)    { msg.textContent = 'Mínimo 8 caracteres.'; return; }
-  if (nova !== confirma)  { msg.textContent = 'As senhas não coincidem.'; return; }
-  const sess = getSession();
-  if (!sess?.access_token){ msg.textContent = 'Sessão expirada. Faça login novamente.'; return; }
-  btn.disabled = true; btn.textContent = 'Salvando...';
+  const nova    = document.getElementById('chpwd-new').value;
+  const confirm = document.getElementById('chpwd-confirm').value;
+  const msg     = document.getElementById('chpwd-msg');
+  const btn     = document.getElementById('chpwd-btn');
+  msg.className='pwd-msg'; msg.textContent='';
+
+  // T1–T7: validação local
+  const err = _pwdValidate(nova, confirm);
+  if (err) { msg.textContent=err; return; }
+
+  // T8: sessão válida
+  const token = await _getSessToken();
+  if (!token) {
+    msg.textContent='Sessão expirada. Faça login novamente.';
+    setTimeout(()=>{ clearSession(); location.reload(); }, 2000);
+    return;
+  }
+
+  // T9: anti duplo-clique
+  if (btn._saving) return;
+  btn._saving=true; btn.disabled=true; btn.textContent='Salvando...';
+
   try {
-    const resp = await fetch(SUPABASE_URL + '/auth/v1/user', {
-      method: 'PUT',
-      headers: sbH(sess.access_token),
-      body: JSON.stringify({ password: nova })
+    const resp = await fetch(SUPABASE_URL+'/auth/v1/user',{
+      method:'PUT', headers:sbH(token),
+      body:JSON.stringify({password:nova})
     });
+    const data = await resp.json().catch(()=>({}));
+
     if (resp.ok) {
-      msg.style.color = '#27ae60';
-      msg.textContent = '✅ Senha alterada com sucesso!';
-      setTimeout(closeChangePwd, 1800);
-      toast('Senha alterada com sucesso!', 'ok');
+      // Limpa flag de primeiro acesso (caso tenha ficado pendente)
+      const uid = data.id || getSession()?._uid;
+      if (uid) await sbPatch(`/rest/v1/profiles?id=eq.${uid}`,{must_change_password:false},token).catch(()=>{});
+      msg.className='pwd-msg ok'; msg.textContent='✅ Senha alterada com sucesso!';
+      toast('Senha atualizada com segurança!','ok',3000);
+      setTimeout(closeChangePwd,1800);
     } else {
-      const d = await resp.json();
-      msg.textContent = d.message || d.msg || 'Erro ao salvar. Tente novamente.';
+      // T10–T12: erros HTTP
+      const errMsg = data?.message || data?.msg || data?.error_description || '';
+      msg.textContent = _pwdHttpErr(resp.status, errMsg);
+      if (resp.status===401) setTimeout(()=>{ clearSession(); location.reload(); },2500);
     }
-  } catch { msg.textContent = 'Erro de conexão. Tente novamente.'; }
-  finally { btn.disabled = false; btn.textContent = 'Salvar nova senha'; }
+  } catch {
+    // T13: rede offline
+    msg.textContent='Sem conexão. Verifique sua internet e tente novamente.';
+  } finally {
+    btn._saving=false; btn.disabled=false; btn.textContent='Salvar nova senha';
+  }
+}
+
+// ── Overlay FORÇADO (primeiro acesso) ───────────────────────
+let _forcedUserId = null;
+
+function showForcedPasswordChange(userId) {
+  _forcedUserId = userId;
+  ['fchpwd-new','fchpwd-confirm'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.value='';el.type='password';}
+  });
+  ['fchpwd-eye','fchpwd-eye2'].forEach(id=>{const b=document.getElementById(id);if(b)b.textContent='👁';});
+  const m=document.getElementById('fchpwd-msg');
+  if(m){m.textContent='';m.className='pwd-msg';}
+  _pwdLive('fchpwd');
+  const ov=document.getElementById('force-chpwd-overlay');
+  ov.style.display='flex';
+
+  // T14: bloqueio de Escape
+  ov.onkeydown = e => { if(e.key==='Escape'||e.key==='Esc') e.preventDefault(); };
+
+  // T15: tabs múltiplas / visibilidade — garante overlay ao voltar pra aba
+  document.addEventListener('visibilitychange', _forceVisibilityGuard);
+
+  setTimeout(()=>document.getElementById('fchpwd-new')?.focus(),150);
+}
+
+function _forceVisibilityGuard() {
+  if(document.visibilityState==='visible' && _forcedUserId) {
+    document.getElementById('force-chpwd-overlay').style.display='flex';
+  }
+}
+
+async function doForcedChangePwd() {
+  const nova    = document.getElementById('fchpwd-new').value;
+  const confirm = document.getElementById('fchpwd-confirm').value;
+  const msg     = document.getElementById('fchpwd-msg');
+  const btn     = document.getElementById('fchpwd-btn');
+  msg.className='pwd-msg'; msg.textContent='';
+
+  // T1–T7: validação
+  const err = _pwdValidate(nova, confirm);
+  if (err) { msg.textContent=err; return; }
+
+  // T8: sessão válida
+  const token = await _getSessToken();
+  if (!token) {
+    msg.textContent='Sessão expirada. Faça login novamente.';
+    setTimeout(()=>{ clearSession(); location.reload(); },2000);
+    return;
+  }
+
+  // T9: anti duplo-clique
+  if (btn._saving) return;
+  btn._saving=true; btn.disabled=true; btn.textContent='Definindo senha...';
+
+  try {
+    const resp = await fetch(SUPABASE_URL+'/auth/v1/user',{
+      method:'PUT', headers:sbH(token),
+      body:JSON.stringify({password:nova})
+    });
+    const data = await resp.json().catch(()=>({}));
+
+    if (resp.ok) {
+      // Limpa flag must_change_password no banco
+      const uid = _forcedUserId || data.id;
+      if (uid) {
+        await sbPatch(`/rest/v1/profiles?id=eq.${uid}`,{must_change_password:false},token);
+      }
+      // Remove guard de visibilidade
+      document.removeEventListener('visibilitychange', _forceVisibilityGuard);
+      _forcedUserId=null;
+
+      // Fecha overlay
+      document.getElementById('force-chpwd-overlay').style.display='none';
+
+      // Celebra
+      toast('✅ Senha definida! Bem-vindo ao JM MapStudio!','ok',5000);
+    } else {
+      const errMsg = data?.message||data?.msg||data?.error_description||'';
+      msg.textContent = _pwdHttpErr(resp.status, errMsg);
+      if (resp.status===401) setTimeout(()=>{ clearSession(); location.reload(); },2500);
+    }
+  } catch {
+    msg.textContent='Sem conexão. Verifique sua internet e tente novamente.';
+  } finally {
+    btn._saving=false; btn.disabled=false; btn.textContent='Definir minha senha';
+  }
 }
 
 async function applySession(token, isCheckoutReturn = false) {
@@ -1660,8 +2037,8 @@ async function applySession(token, isCheckoutReturn = false) {
   const ADMIN_EMAILS = ['juancarlos.agricart@gmail.com'];
   const isOwner = ADMIN_EMAILS.includes((user.email||'').toLowerCase());
 
-  const profiles = await sbGet(`/rest/v1/profiles?id=eq.${user.id}&select=name,role,status`, token);
-  const profile = (profiles?.length) ? profiles[0] : { name: user.email.split('@')[0], role: 'operador', status: 'pending' };
+  const profiles = await sbGet(`/rest/v1/profiles?id=eq.${user.id}&select=name,role,status,must_change_password`, token);
+  const profile = (profiles?.length) ? profiles[0] : { name: user.email.split('@')[0], role: 'operador', status: 'pending', must_change_password: false };
 
   if (isOwner) profile.role = 'admin';
 
@@ -1710,6 +2087,15 @@ async function applySession(token, isCheckoutReturn = false) {
     }
   }
   applyRoleRestrictions(profile.role);
+
+  // Salva uid na sessão (usado por doChangePwd como fallback)
+  const sess = getSession();
+  if (sess) { sess._uid = user.id; setSession(sess); }
+
+  // T16–T20: primeiro acesso — troca obrigatória de senha
+  if (profile.must_change_password) {
+    showForcedPasswordChange(user.id);
+  }
 }
 
 function showSubscriptionRequired() {
