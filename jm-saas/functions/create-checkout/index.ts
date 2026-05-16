@@ -24,7 +24,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    const { priceId, successUrl, cancelUrl } = await req.json()
+    const { priceId, successUrl, cancelUrl, metodo } = await req.json()
 
     if (!priceId) throw new Error('priceId obrigatório')
 
@@ -36,7 +36,6 @@ serve(async (req) => {
     )
     const { data: { user } } = await supabase.auth.getUser()
 
-    const { metodo } = body as { metodo?: string }
     const usePix = metodo === 'pix'
 
     const params: Stripe.Checkout.SessionCreateParams = usePix
@@ -70,7 +69,9 @@ serve(async (req) => {
       headers: { ...CORS, 'Content-Type': 'application/json' }
     })
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    const msg = err?.message || String(err)
+    console.error('[create-checkout] erro:', msg)
+    return new Response(JSON.stringify({ error: msg }), {
       status: 400,
       headers: { ...CORS, 'Content-Type': 'application/json' }
     })
