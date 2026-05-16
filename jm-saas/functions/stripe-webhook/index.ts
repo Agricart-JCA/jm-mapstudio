@@ -8,7 +8,7 @@
 // Secrets obrigatórios (Supabase Dashboard → Settings → Edge Functions):
 //   STRIPE_SECRET_KEY      — sk_live_... ou sk_test_...
 //   STRIPE_WEBHOOK_SECRET  — whsec_... (do painel Stripe → Webhooks)
-//   GMAIL_USER             — comercial@jmtopografiaeng.com
+//   GMAIL_USER             — juancarlos.agricart@gmail.com
 //   GMAIL_APP_PASSWORD     — App Password do Gmail (sem espaços)
 //
 // Secrets opcionais (têm valores padrão):
@@ -36,7 +36,7 @@ const adminClient = createClient(
 const ADMIN_EMAIL      = Deno.env.get('ADMIN_EMAIL')        ?? 'juancarlos.agricart@gmail.com'
 const APP_URL          = Deno.env.get('APP_URL')             ?? 'https://agricart-jca.github.io/jm-mapstudio'
 const RESET_URL        = `${APP_URL}/reset-password.html`
-const GMAIL_USER       = Deno.env.get('GMAIL_USER')          ?? 'comercial@jmtopografiaeng.com'
+const GMAIL_USER       = Deno.env.get('GMAIL_USER')          ?? 'juancarlos.agricart@gmail.com'
 const GMAIL_APP_PASS   = Deno.env.get('GMAIL_APP_PASSWORD')  ?? ''
 
 // ── Busca usuário por e-mail (com paginação completa) ─────────
@@ -217,8 +217,8 @@ function htmlAcesso(
       <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
       <p style="margin:0;font-size:12px;color:#999;text-align:center;line-height:1.7">
         Dúvidas? Entre em contato:<br>
-        <a href="mailto:comercial@jmtopografiaeng.com" style="color:#c0392b;text-decoration:none">
-          comercial@jmtopografiaeng.com
+        <a href="mailto:juancarlos.agricart@gmail.com" style="color:#c0392b;text-decoration:none">
+          juancarlos.agricart@gmail.com
         </a> · (21) 99997-6196
       </p>
     </div>
