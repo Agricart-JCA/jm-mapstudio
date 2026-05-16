@@ -426,6 +426,20 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 #login-btn:hover { background:linear-gradient(135deg,#e74c3c 0%,#c0392b 100%); box-shadow:0 6px 28px rgba(192,57,43,.55); transform:translateY(-1px); }
 #login-btn:disabled { opacity:.6; cursor:default; transform:none; }
 #login-footer { margin-top:22px; font-size:10px; color:var(--dim); text-align:center; line-height:1.8; }
+/* Loading state dentro do login-card */
+#login-loading {
+  display:none; position:absolute; inset:0; z-index:10;
+  border-radius:20px; background:rgba(12,17,23,.88);
+  flex-direction:column; align-items:center; justify-content:center; gap:14px;
+}
+#login-loading .ll-spinner {
+  width:38px; height:38px; border-radius:50%;
+  border:3px solid rgba(192,57,43,.25);
+  border-top-color:var(--red);
+  animation:ll-spin .75s linear infinite;
+}
+#login-loading p { font-size:12px; color:var(--sub); font-weight:600; }
+@keyframes ll-spin { to { transform:rotate(360deg); } }
 .price-card {
   border:1.5px solid var(--border2); border-radius:10px; padding:14px 16px;
   cursor:pointer; transition:all .18s; background:var(--card);
@@ -759,6 +773,11 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 <!-- ══ LOGIN OVERLAY ══ -->
 <div id="login-overlay">
   <div id="login-card">
+    <!-- Loading state enquanto valida sessão existente -->
+    <div id="login-loading">
+      <div class="ll-spinner"></div>
+      <p>Verificando sessão...</p>
+    </div>
 
     <!-- Marca (sempre visível) -->
     <div id="login-logo-wrap">
@@ -1351,7 +1370,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     <h2>Assinatura necessária</h2>
     <p>Sua conta não possui uma assinatura ativa.<br>
        Escolha um plano para acessar o JM MapStudio.</p>
-    <button class="sr-btn sr-btn-primary" onclick="showLoginOverlayWithRegister()">Criar conta e assinar</button>
+    <button class="sr-btn sr-btn-primary" onclick="showLoginOverlayWithPricing()">Ver planos e assinar</button>
     <button class="sr-btn sr-btn-ghost" onclick="doLogout()">Sair da conta</button>
   </div>
 </div>
@@ -1464,9 +1483,38 @@ async function sbPatch(path, body, token) {
   try { return (await fetch(SUPABASE_URL + path, { method:'PATCH', headers:{...sbH(token),'Prefer':'return=minimal'}, body:JSON.stringify(body) })).status; }
   catch { return 500; }
 }
-function getSession() { try { return JSON.parse(sessionStorage.getItem(SESS_KEY)); } catch { return null; } }
-function setSession(s) { sessionStorage.setItem(SESS_KEY, JSON.stringify(s)); }
-function clearSession() { sessionStorage.removeItem(SESS_KEY); }
+function getSession() { try { return JSON.parse(localStorage.getItem(SESS_KEY)); } catch { return null; } }
+function setSession(s) { localStorage.setItem(SESS_KEY, JSON.stringify(s)); }
+function clearSession() { localStorage.removeItem(SESS_KEY); }
+
+// ── Refresh token automático ────────────────────
+async function refreshToken() {
+  const sess = getSession();
+  if (!sess?.refresh_token) return null;
+  try {
+    const data = await sbPost('/auth/v1/token?grant_type=refresh_token', { refresh_token: sess.refresh_token });
+    if (data?.access_token) {
+      setSession({ access_token: data.access_token, refresh_token: data.refresh_token || sess.refresh_token });
+      return data.access_token;
+    }
+  } catch {}
+  return null;
+}
+function _jwtExp(token) {
+  try { return JSON.parse(atob(token.split('.')[1])).exp * 1000; } catch { return 0; }
+}
+// Agenda renovação proativa antes do token expirar
+function scheduleTokenRefresh(token) {
+  const exp = _jwtExp(token);
+  if (!exp) return;
+  const delay = Math.max(0, exp - Date.now() - 120_000); // 2 min antes de expirar
+  clearTimeout(window._refreshTimer);
+  window._refreshTimer = setTimeout(async () => {
+    const fresh = await refreshToken();
+    if (fresh) scheduleTokenRefresh(fresh);
+    else { clearSession(); location.reload(); }
+  }, delay);
+}
 
 // ── initAuth ──────────────────────────────────
 async function initAuth() {
@@ -1497,12 +1545,23 @@ async function initAuth() {
     const s = { access_token: hash.get('access_token'), refresh_token: hash.get('refresh_token') };
     setSession(s);
     window.history.replaceState({}, '', window.location.pathname);
+    scheduleTokenRefresh(s.access_token);
     await applySession(s.access_token, window._checkoutReturn);
     return;
   }
 
   const sess = getSession();
-  if (sess?.access_token) await applySession(sess.access_token, window._checkoutReturn);
+  if (sess?.access_token) {
+    let token = sess.access_token;
+    // Se o token já expirou ou expira em < 2 min, renova antes de usar
+    if (_jwtExp(token) - Date.now() < 120_000) {
+      const fresh = await refreshToken();
+      if (fresh) { token = fresh; }
+      else { clearSession(); return; } // refresh_token inválido → pede login de novo
+    }
+    await applySession(token, window._checkoutReturn);
+    scheduleTokenRefresh(token);
+  }
 }
 
 async function doResetPassword() {
@@ -1584,8 +1643,19 @@ async function doChangePwd() {
 }
 
 async function applySession(token, isCheckoutReturn = false) {
+  // Mostra loading no overlay de login enquanto valida sessão
+  const overlay = document.getElementById('login-overlay');
+  const loadEl  = document.getElementById('login-loading');
+  if (overlay && !overlay.classList.contains('gone') && loadEl) {
+    loadEl.style.display = 'flex';
+  }
+
   const user = await sbGet('/auth/v1/user', token);
-  if (!user?.id) { clearSession(); return; }
+  if (!user?.id) {
+    clearSession();
+    if (loadEl) loadEl.style.display = 'none';
+    return;
+  }
 
   const ADMIN_EMAILS = ['juancarlos.agricart@gmail.com'];
   const isOwner = ADMIN_EMAILS.includes((user.email||'').toLowerCase());
@@ -1607,9 +1677,14 @@ async function applySession(token, isCheckoutReturn = false) {
       const currentStatus = freshProf?.[0]?.status || profile.status;
       hasAccess = !!(subs?.length || currentStatus === 'active');
     }
-    if (!hasAccess) { showSubscriptionRequired(); return; }
+    if (!hasAccess) {
+      if (loadEl) loadEl.style.display = 'none';
+      showSubscriptionRequired();
+      return;
+    }
   }
 
+  if (loadEl) loadEl.style.display = 'none';
   document.getElementById('login-overlay').classList.add('gone');
   document.getElementById('sub-required-overlay').classList.remove('show');
   const initials = profile.name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
@@ -1682,6 +1757,7 @@ async function doLogin() {
     const data = await sbPost('/auth/v1/token?grant_type=password', {email, password});
     if (data?.access_token) {
       setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
+      scheduleTokenRefresh(data.access_token);
       await applySession(data.access_token);
     } else {
       const msg = data?.error_description || data?.msg || '';
