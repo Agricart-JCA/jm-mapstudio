@@ -24,7 +24,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    const { priceId, successUrl, cancelUrl } = await req.json()
+    const body = await req.json()
+    const { priceId, successUrl, cancelUrl, metodo } = body
 
     if (!priceId) throw new Error('priceId obrigatório')
 
@@ -36,19 +37,33 @@ serve(async (req) => {
     )
     const { data: { user } } = await supabase.auth.getUser()
 
-    const params: Stripe.Checkout.SessionCreateParams = {
-      mode: 'subscription',
-      payment_method_types: ['card'],
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: successUrl || `${req.headers.get('origin')}?checkout=success`,
-      cancel_url:  cancelUrl  || `${req.headers.get('origin')}?checkout=cancel`,
-      locale: 'pt-BR',
-      allow_promotion_codes: true,
-      billing_address_collection: 'auto',
-      phone_number_collection: { enabled: true },
-    }
+    const usePix = metodo === 'pix'
 
-    // Se usuário já tem conta, pré-preencher email
+    const params: Stripe.Checkout.SessionCreateParams = usePix
+      ? {
+          // PIX = pagamento único (1 mês de acesso)
+          mode: 'payment',
+          payment_method_types: ['pix'],
+          line_items: [{ price: priceId, quantity: 1 }],
+          success_url: successUrl || `${req.headers.get('origin')}?checkout=success`,
+          cancel_url:  cancelUrl  || `${req.headers.get('origin')}?checkout=cancel`,
+          locale: 'pt-BR',
+          payment_intent_data: { description: 'JM MapStudio — Acesso Mensal via PIX' },
+        }
+      : {
+          // Cartão = assinatura recorrente
+          mode: 'subscription',
+          payment_method_types: ['card'],
+          line_items: [{ price: priceId, quantity: 1 }],
+          success_url: successUrl || `${req.headers.get('origin')}?checkout=success`,
+          cancel_url:  cancelUrl  || `${req.headers.get('origin')}?checkout=cancel`,
+          locale: 'pt-BR',
+          allow_promotion_codes: true,
+          billing_address_collection: 'auto',
+          phone_number_collection: { enabled: true },
+        }
+
+    // Pré-preenche email se usuário logado
     if (user?.email) params.customer_email = user.email
 
     const session = await stripe.checkout.sessions.create(params)
@@ -57,7 +72,9 @@ serve(async (req) => {
       headers: { ...CORS, 'Content-Type': 'application/json' }
     })
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    const msg = err?.message || String(err)
+    console.error('[create-checkout] erro:', msg)
+    return new Response(JSON.stringify({ error: msg }), {
       status: 400,
       headers: { ...CORS, 'Content-Type': 'application/json' }
     })

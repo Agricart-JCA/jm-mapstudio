@@ -1017,33 +1017,14 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
           </div>
         </div>
       </div>
-      <!-- Separador PIX -->
-      <div style="display:flex;align-items:center;gap:8px;margin:14px 0 10px">
-        <div style="flex:1;height:1px;background:var(--border2)"></div>
-        <span style="font-size:10px;color:var(--dim);font-weight:600">ou pague com</span>
-        <div style="flex:1;height:1px;background:var(--border2)"></div>
-      </div>
-      <!-- PIX -->
-      <div class="price-card" id="card-pix" onclick="startCheckout('mensal','pix')"
-           style="border-color:rgba(50,180,100,.3);background:rgba(50,180,100,.05)">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:22px">⚡</span>
-            <div>
-              <div style="font-size:13px;font-weight:700;color:var(--text)">PIX</div>
-              <div style="font-size:10px;color:var(--sub);margin-top:1px">Pagamento instantâneo · 1 mês de acesso</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div id="price-pix-val" style="font-size:18px;font-weight:900;color:#27ae60">R$ —</div>
-            <div style="font-size:9px;color:var(--sub)">à vista</div>
-          </div>
-        </div>
+      <!-- PIX — oculto até conta Stripe BR ser ativada -->
+      <div id="card-pix" style="display:none">
+        <div id="price-pix-val"></div>
       </div>
 
       <div id="pricing-err" style="margin-top:10px;font-size:12px;color:var(--sub);text-align:center;min-height:18px"></div>
       <p style="margin-top:12px;text-align:center;font-size:11px;color:var(--dim)">
-        🔒 Pagamento seguro via <strong style="color:var(--text)">Stripe</strong> · Cartão ou PIX
+        🔒 Pagamento seguro via <strong style="color:var(--text)">Stripe</strong> · Cartão de crédito
       </p>
       <p style="margin-top:6px;text-align:center">
         <a href="#" class="lf-back-link" onclick="event.preventDefault();showLoginStep()">← Voltar ao login</a>
