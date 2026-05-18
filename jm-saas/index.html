@@ -1031,7 +1031,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       <!-- Botão trial -->
       <button id="btn-trial" onclick="startTrial()"
         style="width:100%;padding:12px;border-radius:10px;border:1.5px dashed var(--border2);background:transparent;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s">
-        🎁 Testar grátis por 7 dias
+        🎁 Testar grátis por 30 dias
       </button>
 
       <div id="pricing-err" style="margin-top:10px;font-size:12px;color:var(--sub);text-align:center;min-height:18px"></div>
@@ -2396,7 +2396,7 @@ async function startTrial() {
       errEl.style.color = '#e74c3c';
       errEl.textContent = data.error || 'Erro ao ativar trial.';
       btn.disabled = false;
-      btn.textContent = '🎁 Testar grátis por 7 dias';
+      btn.textContent = '🎁 Testar grátis por 30 dias';
       return;
     }
     // Trial ativado — recarrega sessão e entra no sistema
@@ -2407,7 +2407,7 @@ async function startTrial() {
     errEl.style.color = '#e74c3c';
     errEl.textContent = 'Erro de conexão. Tente novamente.';
     btn.disabled = false;
-    btn.textContent = '🎁 Testar grátis por 7 dias';
+    btn.textContent = '🎁 Testar grátis por 30 dias';
   }
 }
 
@@ -2420,7 +2420,7 @@ function showTrialBanner(trialExpiresAt) {
   if (dias <= 0) return; // expirado, não mostra
   txt.textContent = dias === 1
     ? '🎁 Último dia do período de teste gratuito — assine para continuar'
-    : `🎁 Período de teste: ${dias} dia${dias>1?'s':''} restante${dias>1?'s':''}`;
+    : `🎁 Acesso gratuito: ${dias} dia${dias>1?'s':''} restante${dias>1?'s':''}`;
   banner.style.display = 'flex';
 }
 

@@ -11,7 +11,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const TRIAL_DAYS = 7
+const TRIAL_DAYS = 30
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
