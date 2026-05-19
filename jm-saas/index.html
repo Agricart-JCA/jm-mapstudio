@@ -1431,18 +1431,39 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     </div>
 
     <!-- Instrução inicial -->
-    <div id="fund-instrucao" style="padding:0 12px 12px;flex-shrink:0">
+    <div id="fund-instrucao" style="padding:0 12px 8px;flex-shrink:0">
       <div style="background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:14px;text-align:center">
         <div style="font-size:28px;margin-bottom:8px">🗺</div>
         <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px">Análise Fundiária — RJ</div>
         <div style="font-size:11px;color:var(--sub);line-height:1.7">
-          Pesquise um endereço acima<br>ou clique em um município no mapa<br>para acessar as plantas da região
+          Pesquise um endereço acima<br>ou clique em um município no mapa
         </div>
-        <div id="fund-contador" style="margin-top:10px;font-size:10px;color:var(--dim)">Carregando…</div>
+        <div id="fund-contador" style="margin-top:8px;font-size:10px;color:var(--dim)">Carregando…</div>
       </div>
     </div>
 
-    <!-- Camadas futuras -->
+    <!-- Biblioteca de plantas do município selecionado -->
+    <div id="fund-biblioteca" style="display:none;padding:0 12px 8px;flex-shrink:0">
+      <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">📚 Plantas Disponíveis</div>
+      <div id="fund-plantas-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div id="fund-plantas-vazio" style="display:none;font-size:11px;color:var(--sub);text-align:center;padding:10px 0">
+        Nenhuma planta cadastrada para este município ainda.
+      </div>
+    </div>
+
+    <!-- Banner contribuição -->
+    <div style="margin:0 12px 12px;padding:12px 14px;background:linear-gradient(135deg,rgba(192,57,43,.15),rgba(192,57,43,.05));border:1px solid rgba(192,57,43,.3);border-radius:10px;flex-shrink:0">
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px">📤 Tem uma planta ou mapa antigo?</div>
+      <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:10px">
+        Contribua com o acervo e ganhe acesso gratuito.<br>
+        <strong style="color:#f39c12">1 planta = 1 mês grátis &nbsp;·&nbsp; 5 plantas = 3 meses &nbsp;·&nbsp; 10+ = acesso vitalício</strong>
+      </div>
+      <button onclick="abrirModalContribuicao()" style="width:100%;padding:10px;background:var(--red);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
+        📤 Contribuir com planta
+      </button>
+    </div>
+
+    <!-- Próximas integrações -->
     <div style="padding:0 12px 16px;display:flex;flex-direction:column;gap:6px;flex-shrink:0">
       <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Próximas integrações</div>
       <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#27ae60"></div><div><div class="fund-card-title">CAR / SICAR</div><div class="fund-card-sub">Cadastro Ambiental Rural</div></div><div class="fund-card-badge fund-badge-breve">Em breve</div></div></div>
@@ -1451,6 +1472,99 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     </div>
 
   </div><!-- /tab-2 -->
+
+  <!-- ══ MODAL CONTRIBUIÇÃO DE PLANTA ══ -->
+  <div id="contribuicao-overlay" style="display:none;position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:16px">
+    <div style="background:var(--panel);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto">
+      <div style="padding:16px 18px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:14px;font-weight:800;color:var(--text)">📤 Contribuir com Planta</div>
+          <div style="font-size:11px;color:var(--sub);margin-top:2px">Ganhe acesso gratuito ao contribuir</div>
+        </div>
+        <button onclick="fecharModalContribuicao()" style="background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;padding:4px">✕</button>
+      </div>
+
+      <!-- Recompensas -->
+      <div style="margin:14px 18px;padding:10px 12px;background:rgba(243,156,18,.08);border:1px solid rgba(243,156,18,.3);border-radius:8px">
+        <div style="font-size:10px;font-weight:700;color:#f39c12;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">🎁 Recompensas por aprovação</div>
+        <div style="font-size:11px;color:var(--sub);line-height:1.8">
+          📄 1ª planta aprovada → <strong style="color:var(--text)">1 mês grátis</strong><br>
+          📚 5 plantas aprovadas → <strong style="color:var(--text)">3 meses grátis</strong><br>
+          🏆 10+ plantas aprovadas → <strong style="color:#27ae60">Acesso vitalício</strong>
+        </div>
+      </div>
+
+      <div style="padding:0 18px 18px;display:flex;flex-direction:column;gap:10px">
+        <!-- Município -->
+        <div>
+          <label style="font-size:10px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Município *</label>
+          <input id="contrib-municipio" type="text" placeholder="Ex: Seropédica, Rio de Janeiro..."
+            style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;outline:none;box-sizing:border-box">
+        </div>
+        <!-- Bairro -->
+        <div>
+          <label style="font-size:10px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Bairro / Localidade</label>
+          <input id="contrib-bairro" type="text" placeholder="Opcional"
+            style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;outline:none;box-sizing:border-box">
+        </div>
+        <!-- Título -->
+        <div>
+          <label style="font-size:10px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Título da planta *</label>
+          <input id="contrib-titulo" type="text" placeholder="Ex: Levantamento Planimétrico 1972"
+            style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;outline:none;box-sizing:border-box">
+        </div>
+        <!-- Data aproximada -->
+        <div>
+          <label style="font-size:10px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Época aproximada</label>
+          <input id="contrib-data" type="text" placeholder="Ex: 1972, Década de 80..."
+            style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;outline:none;box-sizing:border-box">
+        </div>
+        <!-- Tipo -->
+        <div>
+          <label style="font-size:10px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Tipo</label>
+          <select id="contrib-tipo" style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;outline:none">
+            <option value="planta">Planta topográfica</option>
+            <option value="mapa">Mapa</option>
+            <option value="croqui">Croqui / Esboço</option>
+            <option value="levantamento">Levantamento cadastral</option>
+            <option value="foto_aerea">Foto aérea</option>
+          </select>
+        </div>
+        <!-- Descrição -->
+        <div>
+          <label style="font-size:10px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Descrição</label>
+          <textarea id="contrib-descricao" placeholder="Informações adicionais sobre a planta..." rows="2"
+            style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;outline:none;resize:vertical;font-family:inherit;box-sizing:border-box"></textarea>
+        </div>
+        <!-- Upload arquivo -->
+        <div>
+          <label style="font-size:10px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Arquivo * (PDF, JPG, PNG — máx 20MB)</label>
+          <div id="contrib-dropzone"
+            onclick="document.getElementById('contrib-file-input').click()"
+            style="border:2px dashed var(--border2);border-radius:8px;padding:18px;text-align:center;cursor:pointer;transition:border-color .2s">
+            <div style="font-size:22px;margin-bottom:6px">📂</div>
+            <div id="contrib-file-nome" style="font-size:11px;color:var(--sub)">Clique ou arraste o arquivo aqui</div>
+          </div>
+          <input id="contrib-file-input" type="file" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff" style="display:none" onchange="contrib_onFileSelect(this)">
+        </div>
+
+        <!-- Barra de progresso -->
+        <div id="contrib-progress-wrap" style="display:none">
+          <div style="height:4px;background:var(--border2);border-radius:2px;overflow:hidden">
+            <div id="contrib-progress-bar" style="height:100%;background:var(--red);width:0%;transition:width .3s"></div>
+          </div>
+          <div id="contrib-progress-txt" style="font-size:10px;color:var(--sub);margin-top:4px;text-align:center">Enviando…</div>
+        </div>
+
+        <div id="contrib-err" style="font-size:11px;color:#e74c3c;text-align:center;min-height:16px"></div>
+
+        <button id="contrib-btn-enviar" onclick="enviarContribuicao()"
+          style="width:100%;padding:12px;background:var(--red);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+          Enviar planta
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- ════ ABA 3 — SEGURANÇA TERRITORIAL ════ -->
   <div id="tab-3" class="tab-panel">
@@ -1657,6 +1771,8 @@ const PRECO_PIX    = 'R$ 1,00'; // teste — trocar antes do lançamento
 const CHECKOUT_FN_URL  = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/create-checkout';
 const INVITE_FN_URL    = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/invite-user';
 const TRIAL_FN_URL     = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/activate-trial';
+const UPLOAD_PLANTA_URL= 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/upload-planta';
+const SUPABASE_REST    = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/rest/v1';
 
 const ROLE_LABELS = { admin:'Administrador', operador:'Operador', visualizador:'Visualizador' };
 const ROLE_COLORS = { admin:'#c0392b', operador:'#2980b9', visualizador:'#27ae60' };
@@ -2369,6 +2485,169 @@ async function doRegister() {
     btn.disabled = false; btn.textContent = 'Criar conta e escolher plano';
   }
 }
+// ══════════════════════════════════════════════════════════════
+// BIBLIOTECA DE PLANTAS
+// ══════════════════════════════════════════════════════════════
+
+let _contrib_file = null;
+
+function abrirModalContribuicao(municipioPreset) {
+  const sess = getSession();
+  if (!sess?.access_token) {
+    toast('Faça login para contribuir com plantas', 'warn');
+    return;
+  }
+  if (municipioPreset) {
+    document.getElementById('contrib-municipio').value = municipioPreset;
+  }
+  document.getElementById('contrib-err').textContent = '';
+  document.getElementById('contribuicao-overlay').style.display = 'flex';
+}
+
+function fecharModalContribuicao() {
+  document.getElementById('contribuicao-overlay').style.display = 'none';
+  _contrib_file = null;
+  document.getElementById('contrib-file-nome').textContent = 'Clique ou arraste o arquivo aqui';
+  document.getElementById('contrib-progress-wrap').style.display = 'none';
+  document.getElementById('contrib-progress-bar').style.width = '0%';
+}
+
+function contrib_onFileSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+  _contrib_file = file;
+  const size = (file.size / 1024 / 1024).toFixed(1);
+  document.getElementById('contrib-file-nome').textContent = `✓ ${file.name} (${size} MB)`;
+  document.getElementById('contrib-dropzone').style.borderColor = 'var(--green)';
+}
+
+async function enviarContribuicao() {
+  const errEl = document.getElementById('contrib-err');
+  const btn   = document.getElementById('contrib-btn-enviar');
+  errEl.textContent = '';
+
+  const municipio = document.getElementById('contrib-municipio').value.trim();
+  const titulo    = document.getElementById('contrib-titulo').value.trim();
+  const bairro    = document.getElementById('contrib-bairro').value.trim();
+  const descricao = document.getElementById('contrib-descricao').value.trim();
+  const tipo      = document.getElementById('contrib-tipo').value;
+  const dataAprox = document.getElementById('contrib-data').value.trim();
+
+  if (!municipio) { errEl.textContent = 'Informe o município.'; return; }
+  if (!titulo)    { errEl.textContent = 'Informe o título da planta.'; return; }
+  if (!_contrib_file) { errEl.textContent = 'Selecione um arquivo.'; return; }
+
+  const sess = getSession();
+  if (!sess?.access_token) { errEl.textContent = 'Sessão expirada. Faça login novamente.'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+  document.getElementById('contrib-progress-wrap').style.display = 'block';
+  document.getElementById('contrib-progress-bar').style.width = '30%';
+
+  try {
+    const form = new FormData();
+    form.append('arquivo',          _contrib_file);
+    form.append('titulo',           titulo);
+    form.append('municipio',        municipio);
+    form.append('bairro',           bairro);
+    form.append('descricao',        descricao);
+    form.append('tipo',             tipo);
+    form.append('data_aproximada',  dataAprox);
+
+    document.getElementById('contrib-progress-bar').style.width = '60%';
+
+    const res  = await fetch(UPLOAD_PLANTA_URL, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + sess.access_token },
+      body: form
+    });
+    const data = await res.json().catch(() => ({}));
+
+    document.getElementById('contrib-progress-bar').style.width = '100%';
+
+    if (!res.ok) {
+      errEl.textContent = data.error || 'Erro no envio. Tente novamente.';
+      btn.disabled = false; btn.textContent = 'Enviar planta';
+      return;
+    }
+
+    toast('✅ Planta enviada! Você receberá acesso gratuito após aprovação (até 48h).', 'ok', 5000);
+    fecharModalContribuicao();
+    btn.disabled = false; btn.textContent = 'Enviar planta';
+  } catch(e) {
+    errEl.textContent = 'Erro de conexão. Verifique sua internet.';
+    btn.disabled = false; btn.textContent = 'Enviar planta';
+  }
+}
+
+async function carregarPlantasMunicipio(nomeMunicipio) {
+  const listEl  = document.getElementById('fund-plantas-list');
+  const vazioEl = document.getElementById('fund-plantas-vazio');
+  const bibEl   = document.getElementById('fund-biblioteca');
+
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="font-size:11px;color:var(--sub);text-align:center;padding:8px">Carregando plantas…</div>';
+  bibEl.style.display = 'block';
+  vazioEl.style.display = 'none';
+
+  try {
+    const url = `${SUPABASE_REST}/plantas?municipio=ilike.${encodeURIComponent(nomeMunicipio)}&status=eq.aprovado&order=created_at.desc&limit=20`;
+    const res  = await fetch(url, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+      }
+    });
+    const plantas = res.ok ? await res.json() : [];
+
+    if (!plantas.length) {
+      listEl.innerHTML = '';
+      vazioEl.style.display = 'block';
+      return;
+    }
+
+    listEl.innerHTML = plantas.map(p => `
+      <div style="background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.titulo}</div>
+            <div style="font-size:10px;color:var(--sub);margin-top:2px">
+              ${p.tipo || 'Planta'}${p.data_aproximada ? ' · ' + p.data_aproximada : ''}${p.bairro ? ' · ' + p.bairro : ''}
+            </div>
+          </div>
+          <a href="${p.pdf_url}" target="_blank" rel="noopener"
+             style="flex-shrink:0;background:var(--red);color:#fff;border-radius:6px;padding:5px 10px;font-size:10px;font-weight:700;text-decoration:none;white-space:nowrap">
+            ↗ Abrir
+          </a>
+        </div>
+        ${p.descricao ? `<div style="font-size:10px;color:var(--dim);margin-top:5px;line-height:1.5">${p.descricao}</div>` : ''}
+      </div>
+    `).join('');
+  } catch(e) {
+    listEl.innerHTML = '<div style="font-size:11px;color:var(--sub);text-align:center;padding:8px">Erro ao carregar plantas.</div>';
+  }
+}
+
+// Drag-and-drop no dropzone
+document.addEventListener('DOMContentLoaded', () => {
+  const dz = document.getElementById('contrib-dropzone');
+  if (!dz) return;
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.style.borderColor='var(--red)'; });
+  dz.addEventListener('dragleave', () => { dz.style.borderColor='var(--border2)'; });
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.style.borderColor = 'var(--border2)';
+    const file = e.dataTransfer?.files[0];
+    if (file) {
+      _contrib_file = file;
+      const size = (file.size/1024/1024).toFixed(1);
+      document.getElementById('contrib-file-nome').textContent = `✓ ${file.name} (${size} MB)`;
+      dz.style.borderColor = 'var(--green)';
+    }
+  });
+});
+
 async function startTrial() {
   const errEl = document.getElementById('pricing-err');
   const btn   = document.getElementById('btn-trial');
@@ -3422,11 +3701,19 @@ function _selecionarMunicipio(feature, layer) {
 
   // Painel sidebar
   document.getElementById('fund-instrucao').style.display = 'none';
+  document.getElementById('fund-biblioteca').style.display = 'none';
   const panel = document.getElementById('fund-mun-panel');
   panel.style.display = 'block';
   document.getElementById('fund-mun-nome').textContent = nome;
   document.getElementById('fund-mun-area').textContent = area + ' km²';
   document.getElementById('fund-mun-cod').textContent  = cod;
+
+  // Carrega plantas do banco para este município
+  carregarPlantasMunicipio(nome);
+
+  // Pré-preenche município no modal de contribuição
+  const inputMun = document.getElementById('contrib-municipio');
+  if (inputMun) inputMun.value = nome;
 
   const btnDrive   = document.getElementById('fund-btn-drive');
   const noPlants   = document.getElementById('fund-no-plants');
