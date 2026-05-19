@@ -1079,7 +1079,29 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
         </div>
         <button class="adm-add-btn" onclick="inviteUser()">✉ Enviar convite</button>
         <div class="adm-msg" id="adm-msg"></div>
+        <!-- Moderação de plantas -->
         <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+          <div class="adm-sec-title" style="display:flex;align-items:center;justify-content:space-between">
+            <span>📋 Plantas pendentes</span>
+            <span id="adm-plantas-badge" style="background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;display:none">0</span>
+          </div>
+          <div id="adm-plantas-lista" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto">
+            <div style="font-size:11px;color:var(--dim);text-align:center;padding:8px">Carregando…</div>
+          </div>
+        </div>
+
+        <!-- Vitalício pendente -->
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+          <div class="adm-sec-title" style="display:flex;align-items:center;justify-content:space-between">
+            <span>🏆 Vitalício pendente</span>
+            <span id="adm-vitalicio-badge" style="background:#f39c12;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;display:none">0</span>
+          </div>
+          <div id="adm-vitalicio-lista" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto">
+            <div style="font-size:11px;color:var(--dim);text-align:center;padding:8px">Carregando…</div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
           <div class="adm-sec-title">Perfis de acesso</div>
           <div style="font-size:11px;color:var(--sub);line-height:1.8">
             <span class="auc-role role-admin">Admin</span> — acesso total, gerencia usuários<br>
@@ -2757,8 +2779,177 @@ async function startCheckout(plan, metodo='card') {
 }
 
 // ── Admin panel ────────────────────────────────
-function openAdminPanel() { renderAdminUsers(); document.getElementById('admin-overlay').classList.add('open'); }
+function openAdminPanel() {
+  renderAdminUsers();
+  carregarModeracaoPlanta();
+  carregarVitalicioPendente();
+  document.getElementById('admin-overlay').classList.add('open');
+}
 function closeAdminPanel() { document.getElementById('admin-overlay').classList.remove('open'); }
+
+// ── Moderação de plantas ──────────────────────────────────────
+async function carregarModeracaoPlanta() {
+  const listaEl  = document.getElementById('adm-plantas-lista');
+  const badgeEl  = document.getElementById('adm-plantas-badge');
+  if (!listaEl) return;
+  const sess = getSession();
+  if (!sess?.access_token) return;
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_REST}/plantas?status=eq.pendente&order=created_at.asc&select=id,titulo,municipio,bairro,tipo,data_aproximada,pdf_url,contribuidor_id`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token } }
+    );
+    const plantas = res.ok ? await res.json() : [];
+
+    if (!plantas.length) {
+      listaEl.innerHTML = '<div style="font-size:11px;color:var(--dim);text-align:center;padding:8px">Nenhuma planta pendente</div>';
+      badgeEl.style.display = 'none';
+      return;
+    }
+
+    badgeEl.textContent = plantas.length;
+    badgeEl.style.display = 'inline';
+
+    listaEl.innerHTML = plantas.map(p => `
+      <div style="background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:3px">${p.titulo}</div>
+        <div style="font-size:10px;color:var(--sub);margin-bottom:6px">
+          ${p.municipio}${p.bairro ? ' · ' + p.bairro : ''} · ${p.tipo}${p.data_aproximada ? ' · ' + p.data_aproximada : ''}
+        </div>
+        <div style="display:flex;gap:6px">
+          <a href="${p.pdf_url}" target="_blank" style="flex:1;text-align:center;padding:6px 0;background:var(--card2);color:var(--sub);border-radius:6px;font-size:10px;font-weight:600;text-decoration:none;border:1px solid var(--border2)">👁 Ver</a>
+          <button onclick="moderarPlanta('${p.id}','aprovado')" style="flex:1;padding:6px 0;background:rgba(39,174,96,.15);color:#27ae60;border:1px solid rgba(39,174,96,.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">✓ Aprovar</button>
+          <button onclick="moderarPlanta('${p.id}','rejeitado')" style="flex:1;padding:6px 0;background:rgba(192,57,43,.12);color:var(--red2);border:1px solid rgba(192,57,43,.25);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">✕ Rejeitar</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {
+    listaEl.innerHTML = '<div style="font-size:11px;color:var(--sub);text-align:center;padding:8px">Erro ao carregar</div>';
+  }
+}
+
+async function moderarPlanta(plantaId, acao) {
+  const sess = getSession();
+  if (!sess?.access_token) return;
+
+  if (acao === 'rejeitado') {
+    const motivo = prompt('Motivo da rejeição (opcional):') ?? '';
+    const res = await fetch(`${SUPABASE_REST}/plantas?id=eq.${plantaId}`, {
+      method: 'PATCH',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ status: 'rejeitado', moderado_em: new Date().toISOString(), rejeicao_motivo: motivo })
+    });
+    if (res.ok) { toast('Planta rejeitada', 'warn'); carregarModeracaoPlanta(); }
+    return;
+  }
+
+  // Aprovação — chama função SQL que calcula recompensa
+  const res = await fetch(`${SUPABASE_REST}/rpc/aprovar_planta`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ planta_uuid: plantaId, admin_uuid: getSession()._uid })
+  });
+  const data = await res.json().catch(() => ({}));
+
+  if (data.ok || res.ok) {
+    const rec = data.recompensa || '';
+    const msg = rec === 'vitalicio_pendente'
+      ? `✅ Aprovada! Usuário elegível para vitalício — aguarda sua análise`
+      : `✅ Aprovada! Recompensa: ${rec === '3_meses' ? '3 meses grátis' : '1 mês grátis'}`;
+    toast(msg, 'ok', 4000);
+    carregarModeracaoPlanta();
+    carregarVitalicioPendente();
+  } else {
+    toast('Erro ao aprovar: ' + (data.msg || data.error || 'tente novamente'), 'warn');
+  }
+}
+
+// ── Vitalício pendente ────────────────────────────────────────
+async function carregarVitalicioPendente() {
+  const listaEl = document.getElementById('adm-vitalicio-lista');
+  const badgeEl = document.getElementById('adm-vitalicio-badge');
+  if (!listaEl) return;
+  const sess = getSession();
+  if (!sess?.access_token) return;
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_REST}/recompensas?tipo=eq.vitalicio_pendente&aplicada=eq.false&select=id,user_id,descricao,created_at`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token } }
+    );
+    const items = res.ok ? await res.json() : [];
+
+    if (!items.length) {
+      listaEl.innerHTML = '<div style="font-size:11px;color:var(--dim);text-align:center;padding:8px">Nenhum pendente</div>';
+      badgeEl.style.display = 'none';
+      return;
+    }
+
+    badgeEl.textContent = items.length;
+    badgeEl.style.display = 'inline';
+
+    // Busca nomes dos usuários
+    const ids = [...new Set(items.map(i => i.user_id))];
+    const perfis = await Promise.all(ids.map(id =>
+      fetch(`${SUPABASE_REST}/profiles?id=eq.${id}&select=id,name,email`, {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token }
+      }).then(r => r.json()).then(arr => arr[0]).catch(() => null)
+    ));
+    const perfilMap = Object.fromEntries(perfis.filter(Boolean).map(p => [p.id, p]));
+
+    listaEl.innerHTML = items.map(item => {
+      const p = perfilMap[item.user_id] || {};
+      return `
+        <div style="background:rgba(243,156,18,.06);border:1px solid rgba(243,156,18,.25);border-radius:8px;padding:10px">
+          <div style="font-size:11px;font-weight:700;color:var(--text)">${p.name || 'Usuário'}</div>
+          <div style="font-size:10px;color:var(--sub);margin-bottom:2px">${p.email || ''}</div>
+          <div style="font-size:10px;color:#f39c12;margin-bottom:8px">${item.descricao}</div>
+          <div style="display:flex;gap:6px">
+            <button onclick="concederVitalicio('${item.user_id}')"
+              style="flex:1;padding:7px 0;background:linear-gradient(135deg,#f39c12,#e67e22);color:#fff;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
+              🏆 Conceder vitalício
+            </button>
+            <button onclick="negarVitalicio('${item.user_id}')"
+              style="flex:1;padding:7px 0;background:var(--card2);color:var(--sub);border:1px solid var(--border2);border-radius:6px;font-size:10px;font-weight:600;cursor:pointer">
+              Negar
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch(e) {
+    listaEl.innerHTML = '<div style="font-size:11px;color:var(--sub);text-align:center;padding:8px">Erro ao carregar</div>';
+  }
+}
+
+async function concederVitalicio(userId) {
+  if (!confirm('Confirma a concessão de acesso VITALÍCIO para este usuário?\n\nEsta ação não pode ser desfeita.')) return;
+  const sess = getSession();
+  const res  = await fetch(`${SUPABASE_REST}/rpc/conceder_vitalicio`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_uuid: userId, admin_uuid: sess._uid })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (data.ok || res.ok) {
+    toast('🏆 Acesso vitalício concedido!', 'ok', 3000);
+    carregarVitalicioPendente();
+  } else {
+    toast('Erro: ' + (data.msg || 'tente novamente'), 'warn');
+  }
+}
+
+async function negarVitalicio(userId) {
+  const sess = getSession();
+  await fetch(`${SUPABASE_REST}/recompensas?user_id=eq.${userId}&tipo=eq.vitalicio_pendente&aplicada=eq.false`, {
+    method: 'PATCH',
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ aplicada: true, aplicada_em: new Date().toISOString() })
+  });
+  toast('Solicitação de vitalício negada', 'warn');
+  carregarVitalicioPendente();
+}
 
 async function renderAdminUsers() {
   const el = document.getElementById('admin-user-list');

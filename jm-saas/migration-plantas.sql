@@ -93,18 +93,22 @@ create trigger plantas_updated_at
   before update on public.plantas
   for each row execute function public.set_updated_at();
 
--- 6. Função: aplicar recompensa ao aprovar planta
+-- 6. Função: aprovar planta + recompensa automática (exceto vitalício)
+-- REGRA:
+--   1 planta  → 1 mês grátis  (automático)
+--   5 plantas → 3 meses grátis (automático)
+--   10+ plantas → solicita vitalício para avaliação humana do ADM
 create or replace function public.aprovar_planta(planta_uuid uuid, admin_uuid uuid)
 returns jsonb
 language plpgsql security definer as $$
 declare
-  v_contrib   uuid;
-  v_total     integer;
-  v_tipo_rec  text;
-  v_desc      text;
-  v_expires   timestamptz;
+  v_contrib     uuid;
+  v_total       integer;
+  v_tipo_rec    text;
+  v_desc        text;
+  v_expires     timestamptz;
+  v_vitalicio   boolean := false;
 begin
-  -- Busca contribuidor
   select contribuidor_id into v_contrib
   from public.plantas where id = planta_uuid;
 
@@ -112,49 +116,97 @@ begin
     return jsonb_build_object('ok', false, 'msg', 'Planta sem contribuidor');
   end if;
 
-  -- Atualiza status da planta
+  -- Aprova a planta
   update public.plantas set
     status       = 'aprovado',
     moderado_por = admin_uuid,
     moderado_em  = now()
   where id = planta_uuid;
 
-  -- Conta total de plantas aprovadas do contribuidor
+  -- Conta plantas aprovadas do contribuidor (inclui a que acabou de aprovar)
   select count(*) into v_total
   from public.plantas
   where contribuidor_id = v_contrib and status = 'aprovado';
 
-  -- Define recompensa por número de contribuições
-  if    v_total >= 10 then v_tipo_rec := 'vitalicio';   v_desc := 'Acesso vitalício gratuito — 10+ plantas contribuídas';  v_expires := null;
-  elsif v_total >= 5  then v_tipo_rec := '3_meses';     v_desc := '3 meses gratuitos — 5 plantas contribuídas';            v_expires := now() + interval '90 days';
-  else                     v_tipo_rec := '1_mes';        v_desc := '1 mês gratuito pela contribuição';                      v_expires := now() + interval '30 days';
+  if v_total >= 10 then
+    -- Vitalício: APENAS cria solicitação pendente para avaliação humana
+    v_vitalicio := true;
+    insert into public.recompensas (user_id, planta_id, tipo, descricao, aplicada)
+    values (v_contrib, planta_uuid,
+            'vitalicio_pendente',
+            format('Elegível para vitalício — %s plantas aprovadas. Aguarda aprovação do ADM.', v_total),
+            false);
+
+  elsif v_total >= 5 then
+    v_tipo_rec := '3_meses';
+    v_desc     := format('3 meses gratuitos — %s plantas aprovadas', v_total);
+    v_expires  := now() + interval '90 days';
+
+  else
+    v_tipo_rec := '1_mes';
+    v_desc     := '1 mês gratuito pela contribuição aprovada';
+    v_expires  := now() + interval '30 days';
   end if;
 
-  -- Insere recompensa
-  insert into public.recompensas (user_id, planta_id, tipo, descricao, expires_at)
-  values (v_contrib, planta_uuid, v_tipo_rec, v_desc, v_expires);
+  -- Aplica recompensa automática (não vitalício)
+  if not v_vitalicio then
+    insert into public.recompensas (user_id, planta_id, tipo, descricao, expires_at, aplicada)
+    values (v_contrib, planta_uuid, v_tipo_rec, v_desc, v_expires, true);
 
-  -- Atualiza profile do contribuidor
-  update public.profiles set
-    status           = 'active',
-    trial_expires_at = case
-      when v_tipo_rec = 'vitalicio' then '2099-12-31'::timestamptz
-      when v_expires is not null    then greatest(coalesce(trial_expires_at, now()), now()) + (v_expires - now())
-      else trial_expires_at
-    end,
-    plan_name = case
-      when v_tipo_rec = 'vitalicio' then 'Contribuidor Vitalício'
-      when v_tipo_rec = '3_meses'   then 'Contribuidor 3 Meses'
-      else coalesce(plan_name, 'Contribuidor 1 Mês')
-    end
+    update public.profiles set
+      status           = 'active',
+      trial_expires_at = greatest(coalesce(trial_expires_at, now()), now()) + (v_expires - now()),
+      plan_name        = case
+        when v_tipo_rec = '3_meses' then 'Contribuidor 3 Meses'
+        else coalesce(plan_name, 'Contribuidor 1 Mês')
+      end
   where id = v_contrib;
 
   return jsonb_build_object(
-    'ok', true,
+    'ok',           true,
     'contribuidor', v_contrib,
     'total_plantas', v_total,
-    'recompensa', v_tipo_rec
+    'recompensa',   coalesce(v_tipo_rec, 'vitalicio_pendente'),
+    'vitalicio_pendente', v_vitalicio
   );
+end;
+$$;
+
+-- 7. Função: conceder vitalício manualmente pelo ADM
+create or replace function public.conceder_vitalicio(user_uuid uuid, admin_uuid uuid)
+returns jsonb
+language plpgsql security definer as $$
+declare
+  v_is_admin boolean;
+begin
+  -- Verifica que quem chama é admin
+  select exists(select 1 from public.profiles where id = admin_uuid and role = 'admin')
+  into v_is_admin;
+
+  if not v_is_admin then
+    return jsonb_build_object('ok', false, 'msg', 'Apenas administradores podem conceder vitalício');
+  end if;
+
+  -- Marca recompensas pendentes de vitalício como aplicadas
+  update public.recompensas set
+    aplicada    = true,
+    aplicada_em = now()
+  where user_id = user_uuid
+    and tipo    = 'vitalicio_pendente'
+    and aplicada = false;
+
+  -- Registra a concessão definitiva
+  insert into public.recompensas (user_id, tipo, descricao, aplicada, aplicada_em)
+  values (user_uuid, 'vitalicio', 'Acesso vitalício concedido pelo administrador', true, now());
+
+  -- Atualiza profile
+  update public.profiles set
+    status           = 'active',
+    trial_expires_at = '2099-12-31 23:59:59'::timestamptz,
+    plan_name        = 'Contribuidor Vitalício'
+  where id = user_uuid;
+
+  return jsonb_build_object('ok', true, 'user_id', user_uuid);
 end;
 $$;
 
