@@ -1452,6 +1452,26 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       </div>
     </div>
 
+    <!-- ── PAINEL CAR / SICAR ── -->
+    <div id="fund-car-panel" style="display:none;margin:0 12px 10px;flex-shrink:0">
+      <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+        🌱 CAR / SICAR — Imóveis encontrados
+        <span id="fund-car-count" style="background:rgba(39,174,96,.15);color:#27ae60;padding:1px 6px;border-radius:10px;font-size:9px"></span>
+      </div>
+      <div id="fund-car-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div id="fund-car-empty" style="display:none;background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:12px;text-align:center;font-size:11px;color:var(--sub)">
+        Nenhum imóvel CAR encontrado neste ponto
+      </div>
+      <div id="fund-car-loading" style="display:none;text-align:center;padding:12px;font-size:11px;color:var(--sub)">
+        <div class="fund-spinner" style="margin:0 auto 6px"></div>Consultando SICAR...
+      </div>
+    </div>
+
+    <!-- Dica de clique para CAR -->
+    <div id="fund-car-hint" style="margin:0 12px 8px;padding:8px 10px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.2);border-radius:8px;font-size:10px;color:#27ae60;text-align:center;flex-shrink:0">
+      🖱 Clique em qualquer ponto no mapa para consultar imóveis CAR / SICAR
+    </div>
+
     <!-- Instrução inicial -->
     <div id="fund-instrucao" style="padding:0 12px 8px;flex-shrink:0">
       <div style="background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:14px;text-align:center">
@@ -3799,6 +3819,7 @@ function goToGPS() {
 // ABAS
 // ══════════════════════════════════════════════
 function switchTab(n) {
+  window._activeTab = n;
   [1,2,3].forEach(i => {
     document.getElementById('tab-' + i).classList.toggle('active', i === n);
     document.getElementById('tabn-' + i).classList.toggle('active', i === n);
@@ -3806,6 +3827,7 @@ function switchTab(n) {
   if (n === 2) initFundiario();
   if (n === 3) initSeguranca();
 }
+window._activeTab = 1;
 
 // ══════════════════════════════════════════════
 // MÓDULO FUNDIÁRIO
@@ -3980,6 +4002,207 @@ function fundSelectLoc(lat, lon, nome) {
   }
 
   closeSidebar();
+}
+
+// ══════════════════════════════════════════════
+// MÓDULO CAR / SICAR — consulta por clique no mapa
+// ══════════════════════════════════════════════
+const SICAR_WFS = 'https://geoserver.car.gov.br/geoserver/sicar/ows';
+let _carLayer  = null;
+let _carFeats  = [];
+
+// Listener de clique no mapa para o módulo fundiário
+map.on('click', async function(e) {
+  if (window._activeTab !== 2) return;
+  if (window._fundMarker || measureMode) return; // não interferir com outras ferramentas
+  await consultarCAR(e.latlng.lat, e.latlng.lng);
+});
+
+async function consultarCAR(lat, lon) {
+  const panel   = document.getElementById('fund-car-panel');
+  const loading = document.getElementById('fund-car-loading');
+  const list    = document.getElementById('fund-car-list');
+  const empty   = document.getElementById('fund-car-empty');
+  const count   = document.getElementById('fund-car-count');
+  const hint    = document.getElementById('fund-car-hint');
+
+  panel.style.display   = 'block';
+  loading.style.display = 'block';
+  list.innerHTML        = '';
+  empty.style.display   = 'none';
+  hint.style.display    = 'none';
+  count.textContent     = '';
+
+  // Limpa camada anterior
+  if (_carLayer) { map.removeLayer(_carLayer); _carLayer = null; }
+
+  try {
+    // Bbox de ~100m ao redor do ponto
+    const d = 0.0009;
+    const bbox = `${lon-d},${lat-d},${lon+d},${lat+d},EPSG:4326`;
+    const params = new URLSearchParams({
+      service:'WFS', version:'2.0.0', request:'GetFeature',
+      typeName:'sicar:sicar_imoveis_rj', outputFormat:'application/json',
+      count:'10', bbox
+    });
+
+    const res  = await fetch(`${SICAR_WFS}?${params}`, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) throw new Error('SICAR indisponível');
+    const data = await res.json();
+    _carFeats  = data.features || [];
+
+    loading.style.display = 'none';
+
+    if (!_carFeats.length) {
+      empty.style.display = 'block';
+      return;
+    }
+
+    count.textContent = _carFeats.length + ' imóvel' + (_carFeats.length > 1 ? 'is' : '');
+
+    // Desenha polígonos no mapa
+    _carLayer = L.geoJSON(data, {
+      style: { color:'#27ae60', weight:2.5, fillColor:'#27ae60', fillOpacity:0.15, dashArray:null },
+      onEachFeature: (feat, layer) => {
+        const p   = feat.properties || {};
+        const cod = p.cod_imovel || '—';
+        const area = parseFloat(p.area_imovel || p.area || 0).toFixed(2);
+        layer.bindPopup(`<b>🌱 ${cod}</b><br><small>${area} ha</small>`);
+        layer.on('click', () => {
+          document.getElementById('car-item-' + cod.replace(/[^a-z0-9]/gi,'_'))?.scrollIntoView({ behavior:'smooth' });
+        });
+      }
+    }).addTo(map);
+    map.fitBounds(_carLayer.getBounds(), { padding:[40,40], maxZoom:15 });
+
+    // Renderiza cards
+    list.innerHTML = _carFeats.map((f, i) => {
+      const p   = f.properties || {};
+      const cod = p.cod_imovel || '—';
+      const area = parseFloat(p.area_imovel || p.area || 0).toFixed(2);
+      const sit = String(p.condicao || p.situacao || '').toLowerCase();
+      const status = sit.includes('certif') ? '✅ Certificado'
+                   : sit.includes('cancel') ? '❌ Cancelado'
+                   : sit.includes('pend')   ? '⏳ Pendente'
+                   : sit ? '📋 ' + sit : '—';
+      const tipo = p.tipo_imovel === 'IRU' ? 'Imóvel Rural' : (p.tipo_imovel || '—');
+      const safeId = cod.replace(/[^a-z0-9]/gi,'_');
+
+      return `
+        <div id="car-item-${safeId}" style="background:var(--card);border:1px solid rgba(39,174,96,.3);border-radius:10px;padding:12px;font-size:11px">
+          <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px">
+            <div style="width:8px;height:8px;border-radius:50%;background:#27ae60;flex-shrink:0;margin-top:3px"></div>
+            <div>
+              <div style="font-size:11px;font-weight:700;color:var(--text);word-break:break-all">${cod}</div>
+              <div style="font-size:10px;color:var(--sub);margin-top:1px">${tipo}</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:10px">
+            <div style="background:var(--card2);border-radius:6px;padding:6px 8px">
+              <div style="font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px">Área</div>
+              <div style="font-size:12px;font-weight:700;color:var(--text)">${area} ha</div>
+            </div>
+            <div style="background:var(--card2);border-radius:6px;padding:6px 8px">
+              <div style="font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px">Status</div>
+              <div style="font-size:11px;font-weight:600;color:var(--text)">${status}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button onclick="_carZoom(${i})" style="flex:1;padding:7px 0;background:rgba(39,174,96,.12);color:#27ae60;border:1px solid rgba(39,174,96,.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
+              🎯 Ver no mapa
+            </button>
+            <button onclick="_downloadCarKml(${i})" style="flex:1;padding:7px 0;background:rgba(26,115,232,.12);color:#1a73e8;border:1px solid rgba(26,115,232,.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
+              ⬇ KML
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+
+  } catch(err) {
+    loading.style.display = 'none';
+    empty.style.display   = 'block';
+    empty.textContent     = '⚠️ Erro ao consultar SICAR: ' + (err.message || 'tente novamente');
+    console.error('[CAR]', err);
+  }
+}
+
+function _carZoom(idx) {
+  const feat = _carFeats[idx];
+  if (!feat || !_carLayer) return;
+  _carLayer.eachLayer(l => {
+    if (l.feature === feat) {
+      map.fitBounds(l.getBounds(), { padding:[30,30], maxZoom:16 });
+      l.openPopup();
+    }
+  });
+}
+
+// ── Converte GeoJSON geometry → KML ──────────────────────────
+function _geomToKml(geom) {
+  if (!geom) return '';
+  function coordsToKml(coords, depth) {
+    if (depth === 0) return coords.map(c => `${c[0]},${c[1]},0`).join(' ');
+    return coords.map(ring => `<LinearRing><coordinates>${ring.map(c => `${c[0]},${c[1]},0`).join(' ')}</coordinates></LinearRing>`).join('');
+  }
+  if (geom.type === 'Polygon') {
+    const outer = geom.coordinates[0];
+    const inner = geom.coordinates.slice(1);
+    return `<Polygon><outerBoundaryIs><LinearRing><coordinates>${outer.map(c=>`${c[0]},${c[1]},0`).join(' ')}</coordinates></LinearRing></outerBoundaryIs>${inner.map(r=>`<innerBoundaryIs><LinearRing><coordinates>${r.map(c=>`${c[0]},${c[1]},0`).join(' ')}</coordinates></LinearRing></innerBoundaryIs>`).join('')}</Polygon>`;
+  }
+  if (geom.type === 'MultiPolygon') {
+    return `<MultiGeometry>${geom.coordinates.map(poly => {
+      const outer = poly[0];
+      const inner = poly.slice(1);
+      return `<Polygon><outerBoundaryIs><LinearRing><coordinates>${outer.map(c=>`${c[0]},${c[1]},0`).join(' ')}</coordinates></LinearRing></outerBoundaryIs>${inner.map(r=>`<innerBoundaryIs><LinearRing><coordinates>${r.map(c=>`${c[0]},${c[1]},0`).join(' ')}</coordinates></LinearRing></innerBoundaryIs>`).join('')}</Polygon>`;
+    }).join('')}</MultiGeometry>`;
+  }
+  return '';
+}
+
+function _downloadCarKml(idx) {
+  const feat = _carFeats[idx];
+  if (!feat) return;
+  const p    = feat.properties || {};
+  const cod  = p.cod_imovel || 'imovel_' + idx;
+  const area = parseFloat(p.area_imovel || p.area || 0).toFixed(2);
+  const tipo = p.tipo_imovel === 'IRU' ? 'Imóvel Rural' : (p.tipo_imovel || '');
+  const sit  = String(p.condicao || p.situacao || '');
+  const geomKml = _geomToKml(feat.geometry);
+  if (!geomKml) { toast('Geometria não disponível', 'warn'); return; }
+
+  const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>${cod}</name>
+    <description>Imóvel CAR exportado pelo JM MapStudio</description>
+    <Style id="carStyle">
+      <LineStyle><color>ff27ae60</color><width>2</width></LineStyle>
+      <PolyStyle><color>1927ae60</color></PolyStyle>
+    </Style>
+    <Placemark>
+      <name>${cod}</name>
+      <description><![CDATA[
+        <b>Código CAR:</b> ${cod}<br>
+        <b>Tipo:</b> ${tipo}<br>
+        <b>Área:</b> ${area} ha<br>
+        <b>Status:</b> ${sit}<br>
+        <b>Fonte:</b> SICAR — geoserver.car.gov.br<br>
+        <b>Exportado por:</b> JM MapStudio — jmtopografiaeng.com
+      ]]></description>
+      <styleUrl>#carStyle</styleUrl>
+      ${geomKml}
+    </Placemark>
+  </Document>
+</kml>`;
+
+  const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `CAR_${cod.replace(/[^a-zA-Z0-9-]/g,'_')}.kml`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`KML do imóvel ${cod} baixado!`, 'ok');
 }
 
 // ── Busca fundiária (Nominatim, mesma base da busca principal) ──
