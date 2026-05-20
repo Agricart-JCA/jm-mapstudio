@@ -15,12 +15,19 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   httpClient: Stripe.createFetchHttpClient(),
 })
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+const ALLOWED_ORIGINS = [
+  'https://jm-saas.vercel.app',
+  'https://agricart-jca.github.io',
+  'http://localhost:3456',
+]
+function corsHeaders(req: Request) {
+  const origin = req.headers.get('origin') || ''
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
+  return { 'Access-Control-Allow-Origin': allowed, 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 }
 
 serve(async (req) => {
+  const CORS = corsHeaders(req)
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
@@ -29,13 +36,14 @@ serve(async (req) => {
 
     if (!priceId) throw new Error('priceId obrigatório')
 
-    // Verificar usuário logado (opcional — permite checkout sem conta)
+    // Autenticação obrigatória
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: req.headers.get('Authorization') || '' } } }
     )
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user }, error: authErr } = await supabase.auth.getUser()
+    if (authErr || !user) throw new Error('Autenticação necessária')
 
     const usePix = metodo === 'pix'
 
@@ -74,7 +82,8 @@ serve(async (req) => {
   } catch (err) {
     const msg = err?.message || String(err)
     console.error('[create-checkout] erro:', msg)
-    return new Response(JSON.stringify({ error: msg }), {
+    const safe = msg.startsWith('priceId') || msg.startsWith('Autenticação') ? msg : 'Erro ao processar pagamento'
+    return new Response(JSON.stringify({ error: safe }), {
       status: 400,
       headers: { ...CORS, 'Content-Type': 'application/json' }
     })

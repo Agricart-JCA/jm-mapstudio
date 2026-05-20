@@ -74,16 +74,24 @@ function gerarSenhaProvisoria(): string {
   const s = '!@#$'
   const todos = M + m + n + s
 
+  // Usar crypto seguro (não Math.random)
+  const bytes = new Uint8Array(12)
+  crypto.getRandomValues(bytes)
   const partes = [
-    M[Math.floor(Math.random() * M.length)],
-    m[Math.floor(Math.random() * m.length)],
-    n[Math.floor(Math.random() * n.length)],
-    s[Math.floor(Math.random() * s.length)],
+    M[bytes[0] % M.length],
+    m[bytes[1] % m.length],
+    n[bytes[2] % n.length],
+    s[bytes[3] % s.length],
   ]
-  for (let i = 0; i < 8; i++) {
-    partes.push(todos[Math.floor(Math.random() * todos.length)])
+  for (let i = 4; i < 12; i++) partes.push(todos[bytes[i] % todos.length])
+  // Embaralhar com Fisher-Yates seguro
+  const shuffleBytes = new Uint8Array(partes.length)
+  crypto.getRandomValues(shuffleBytes)
+  for (let i = partes.length - 1; i > 0; i--) {
+    const j = shuffleBytes[i] % (i + 1);
+    [partes[i], partes[j]] = [partes[j], partes[i]]
   }
-  return partes.sort(() => Math.random() - 0.5).join('')
+  return partes.join('')
 }
 
 // ── Envia e-mail via Gmail SMTP ───────────────────────────────

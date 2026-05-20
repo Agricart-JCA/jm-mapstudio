@@ -6,14 +6,17 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+const ALLOWED_ORIGINS = ['https://jm-saas.vercel.app','https://agricart-jca.github.io','http://localhost:3456']
+function corsHeaders(req: Request) {
+  const origin = req.headers.get('origin') || ''
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
+  return { 'Access-Control-Allow-Origin': allowed, 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
 }
 
 const TRIAL_DAYS = 30
 
 serve(async (req) => {
+  const CORS = corsHeaders(req)
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
@@ -54,11 +57,11 @@ serve(async (req) => {
       .update({
         status: 'trial',
         trial_expires_at: trialExpires,
-        plan_name: 'Trial 7 dias',
+        plan_name: 'Trial 30 dias',
       })
       .eq('id', user.id)
 
-    if (updateErr) throw new Error('Erro ao ativar trial: ' + updateErr.message)
+    if (updateErr) { console.error('[activate-trial] db:', updateErr.message); throw new Error('Erro ao ativar trial') }
 
     return new Response(
       JSON.stringify({ ok: true, trial_expires_at: trialExpires, days: TRIAL_DAYS }),

@@ -224,6 +224,9 @@ export async function buscarPorCodigoCAR(codigo: string): Promise<{
   centroide?: { lat: number; lon: number };
 }> {
   const codigoClean = codigo.replace(/\s/g, '').toUpperCase();
+  // Valida formato estrito para evitar CQL injection
+  const RE_CAR = /^[A-Z]{2}-\d{7}-[A-Z0-9]{12,50}$/;
+  if (!RE_CAR.test(codigoClean)) throw new Error('Código CAR inválido');
   const params = new URLSearchParams({
     service: 'WFS', version: '2.0.0', request: 'GetFeature',
     typeName: 'sicar:sicar_imoveis_rj', outputFormat: 'application/json',

@@ -2243,13 +2243,9 @@ async function applySession(token, isCheckoutReturn = false) {
     return;
   }
 
-  const ADMIN_EMAILS = ['juancarlos.agricart@gmail.com'];
-  const isOwner = ADMIN_EMAILS.includes((user.email||'').toLowerCase());
-
   const profiles = await sbGet(`/rest/v1/profiles?id=eq.${user.id}&select=name,role,status,must_change_password,trial_expires_at`, token);
   const profile = (profiles?.length) ? profiles[0] : { name: user.email.split('@')[0], role: 'operador', status: 'pending', must_change_password: false, trial_expires_at: null };
-
-  if (isOwner) profile.role = 'admin';
+  // role vem exclusivamente do banco — nunca sobrescrever no frontend
 
   if (profile.role !== 'admin') {
     let hasAccess = false;
@@ -2848,7 +2844,7 @@ async function moderarPlanta(plantaId, acao) {
   const res = await fetch(`${SUPABASE_REST}/rpc/aprovar_planta`, {
     method: 'POST',
     headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ planta_uuid: plantaId, admin_uuid: getSession()._uid })
+    body: JSON.stringify({ planta_uuid: plantaId })
   });
   const data = await res.json().catch(() => ({}));
 
@@ -2929,7 +2925,7 @@ async function concederVitalicio(userId) {
   const res  = await fetch(`${SUPABASE_REST}/rpc/conceder_vitalicio`, {
     method: 'POST',
     headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_uuid: userId, admin_uuid: sess._uid })
+    body: JSON.stringify({ user_uuid: userId })
   });
   const data = await res.json().catch(() => ({}));
   if (data.ok || res.ok) {
@@ -4380,12 +4376,12 @@ function initSeguranca() {
   if (_segInitialized) return;
   _segInitialized = true;
   _segLayer = L.layerGroup().addTo(map);
-  if (!localStorage.getItem('seg_email')) setTimeout(abrirSegModal, 400);
+  if (!sessionStorage.getItem('seg_email')) setTimeout(abrirSegModal, 400);
 }
 
 function abrirSegModal() {
-  document.getElementById('seg-email-inp').value = localStorage.getItem('seg_email') || '';
-  document.getElementById('seg-pass-inp').value  = localStorage.getItem('seg_pass')  || '';
+  document.getElementById('seg-email-inp').value = sessionStorage.getItem('seg_email') || '';
+  document.getElementById('seg-pass-inp').value  = sessionStorage.getItem('seg_pass')  || '';
   document.getElementById('seg-cred-err').textContent = '';
   document.getElementById('seg-cred-modal').classList.add('open');
 }
@@ -4394,8 +4390,8 @@ function salvarSegCredenciais() {
   const email = document.getElementById('seg-email-inp').value.trim();
   const pass  = document.getElementById('seg-pass-inp').value;
   if (!email || !pass) { document.getElementById('seg-cred-err').textContent = 'Preencha e-mail e senha.'; return; }
-  localStorage.setItem('seg_email', email);
-  localStorage.setItem('seg_pass',  pass);
+  sessionStorage.setItem('seg_email', email);
+  sessionStorage.setItem('seg_pass',  pass);
   _segToken = null; _segTokenExpiry = 0;
   fecharSegModal();
   toast('Credenciais salvas', 'ok');
@@ -4408,8 +4404,8 @@ function _segStatus(estado, txt) {
 
 async function _segGetToken() {
   if (_segToken && Date.now() < _segTokenExpiry) return _segToken;
-  const email = localStorage.getItem('seg_email');
-  const password = localStorage.getItem('seg_pass');
+  const email = sessionStorage.getItem('seg_email');
+  const password = sessionStorage.getItem('seg_pass');
   if (!email || !password) throw new Error('Credenciais nao configuradas');
   const resp = await fetch(SEG_API + '/auth/login', {
     method:'POST', headers:{'Content-Type':'application/json'},
@@ -4440,7 +4436,7 @@ async function _segGetStateId(token) {
 }
 
 async function segCarregar() {
-  if (!localStorage.getItem('seg_email')) { abrirSegModal(); return; }
+  if (!sessionStorage.getItem('seg_email')) { abrirSegModal(); return; }
   const btn = document.getElementById('seg-load-btn');
   btn.disabled = true; btn.textContent = 'Carregando...';
   _segStatus('loading', 'Autenticando...');
