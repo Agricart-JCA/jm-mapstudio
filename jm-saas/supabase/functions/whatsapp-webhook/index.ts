@@ -17,6 +17,26 @@ import {
 
 const MAP_BASE = 'https://agricart-jca.github.io/jm-mapstudio';
 
+// ── Valida assinatura HMAC-SHA256 do Meta ─────────────────────
+async function validateSignature(req: Request, rawBody: Uint8Array): Promise<boolean> {
+  const appSecret = Deno.env.get('WHATSAPP_APP_SECRET');
+  if (!appSecret) {
+    console.warn('[WA] WHATSAPP_APP_SECRET não configurado — assinatura ignorada');
+    return true; // permissivo enquanto não configurado
+  }
+  const sigHeader = req.headers.get('x-hub-signature-256') ?? '';
+  if (!sigHeader.startsWith('sha256=')) return false;
+  const expected = sigHeader.slice(7);
+
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(appSecret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sig  = await crypto.subtle.sign('HMAC', key, rawBody);
+  const hex  = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return hex === expected;
+}
+
 // ── GET — verificação Meta ────────────────────────────────────
 function handleVerify(req: Request): Response {
   const url       = new URL(req.url);
@@ -53,8 +73,15 @@ function extractMessages(body: unknown): WaMessage[] {
 
 // ── POST — mensagens recebidas ────────────────────────────────
 async function handlePost(req: Request): Promise<Response> {
+  const rawBody = new Uint8Array(await req.arrayBuffer());
+  const valid = await validateSignature(req, rawBody);
+  if (!valid) {
+    console.warn('[WA] Assinatura inválida — requisição rejeitada');
+    return new Response('Forbidden', { status: 403 });
+  }
+
   let body: unknown;
-  try { body = await req.json(); }
+  try { body = JSON.parse(new TextDecoder().decode(rawBody)); }
   catch { return new Response('Bad Request', { status: 400 }); }
 
   const messages = extractMessages(body);
