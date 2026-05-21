@@ -1871,9 +1871,6 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       </div>
 
     </div><!-- /seg-panel -->
-  </div><!-- /tab-3-inner -->
-      <div style="margin-top:8px;padding:8px 16px;background:var(--card);border:1px solid var(--border2);border-radius:20px;font-size:10px;color:var(--sub);letter-spacing:1px;text-transform:uppercase;font-weight:700">Em breve</div>
-    </div>
   </div><!-- /tab-3 -->
 
   <!-- ════ ABA 4 — REURB ════ -->
@@ -5324,16 +5321,21 @@ async function reurbInit() {
   _reurbInitialized = true;
   if (!_reurbLayer) _reurbLayer = L.layerGroup().addTo(map);
 
-  // Verifica role
-  const sess = getSession();
-  if (sess?.access_token) {
-    try {
-      const r = await fetch(`${SUPABASE_REST}/profiles?id=eq.${sess.user?.id}&select=role`, {
-        headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token }
-      });
-      const d = r.ok ? await r.json() : [];
-      _reurbAdmin = d[0]?.role === 'admin';
-    } catch {}
+  // Verifica role: usa o label já carregado no login (evita chamada extra)
+  const roleLbl = document.getElementById('user-role-lbl');
+  _reurbAdmin = roleLbl?.classList.contains('role-admin') || false;
+  // Fallback: tenta via API se DOM não tiver info
+  if (!_reurbAdmin) {
+    const sess = getSession();
+    if (sess?.access_token) {
+      try {
+        const r = await fetch(`${SUPABASE_REST}/profiles?id=eq.${sess.user?.id}&select=role`, {
+          headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token }
+        });
+        const d = r.ok ? await r.json() : [];
+        _reurbAdmin = d[0]?.role === 'admin';
+      } catch {}
+    }
   }
 
   // Mostra barra admin
