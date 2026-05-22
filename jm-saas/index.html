@@ -1657,19 +1657,56 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;display:flex;align-items:center;gap:6px">
         🌱 CAR / SICAR — Imóveis encontrados
         <span id="fund-car-count" style="background:rgba(39,174,96,.15);color:#27ae60;padding:1px 6px;border-radius:10px;font-size:9px"></span>
+        <span id="fund-car-uf" style="background:var(--card2);color:var(--sub);padding:1px 6px;border-radius:10px;font-size:9px;margin-left:auto"></span>
       </div>
       <div id="fund-car-list" style="display:flex;flex-direction:column;gap:6px"></div>
       <div id="fund-car-empty" style="display:none;background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:12px;text-align:center;font-size:11px;color:var(--sub)">
         Nenhum imóvel CAR encontrado neste ponto
       </div>
       <div id="fund-car-loading" style="display:none;text-align:center;padding:12px;font-size:11px;color:var(--sub)">
-        <div class="fund-spinner" style="margin:0 auto 6px"></div>Consultando SICAR...
+        <div class="fund-spinner" style="margin:0 auto 6px"></div>Consultando SICAR…
       </div>
     </div>
 
-    <!-- Dica de clique para CAR -->
-    <div id="fund-car-hint" style="margin:0 12px 8px;padding:8px 10px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.2);border-radius:8px;font-size:10px;color:#27ae60;text-align:center;flex-shrink:0">
-      🖱 Clique em qualquer ponto no mapa para consultar imóveis CAR / SICAR
+    <!-- ── PAINEL SIGEF / INCRA ── -->
+    <div id="fund-sigef-panel" style="display:none;margin:0 12px 10px;flex-shrink:0">
+      <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+        🏛 SIGEF / INCRA — Imóveis certificados
+        <span id="fund-sigef-count" style="background:rgba(41,128,185,.15);color:#2980b9;padding:1px 6px;border-radius:10px;font-size:9px"></span>
+      </div>
+      <div id="fund-sigef-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div id="fund-sigef-empty" style="display:none;background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--sub)">
+        <div style="margin-bottom:8px;text-align:center">Sem certificações SIGEF neste ponto</div>
+        <a id="fund-sigef-link" href="https://certificacao.incra.gov.br" target="_blank"
+          style="display:block;text-align:center;padding:7px;background:rgba(41,128,185,.1);color:#2980b9;border:1px solid rgba(41,128,185,.3);border-radius:7px;font-size:10px;font-weight:700;text-decoration:none">
+          🔗 Consultar no portal INCRA
+        </a>
+      </div>
+      <div id="fund-sigef-loading" style="display:none;text-align:center;padding:12px;font-size:11px;color:var(--sub)">
+        <div class="fund-spinner" style="margin:0 auto 6px;border-top-color:#2980b9"></div>Consultando SIGEF…
+      </div>
+    </div>
+
+    <!-- Busca por código SIGEF -->
+    <div id="fund-sigef-search" style="margin:0 12px 8px;flex-shrink:0;display:none">
+      <div style="display:flex;gap:6px">
+        <input id="fund-sigef-cod" placeholder="Código SIGEF (ex: RJ/0000/00000-0)"
+          style="flex:1;background:var(--card);border:1px solid rgba(41,128,185,.3);border-radius:8px;padding:7px 10px;font-size:11px;color:var(--text);font-family:var(--font);outline:none"
+          onfocus="this.style.borderColor='#2980b9'" onblur="this.style.borderColor='rgba(41,128,185,.3)'"
+          onkeydown="if(event.key==='Enter') sigefBuscarCodigo()">
+        <button onclick="sigefBuscarCodigo()"
+          style="padding:7px 12px;background:#2980b9;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">→</button>
+      </div>
+    </div>
+
+    <!-- Dica de clique (CAR + SIGEF) -->
+    <div id="fund-car-hint" style="margin:0 12px 8px;flex-shrink:0">
+      <div style="padding:8px 10px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.2);border-radius:8px;font-size:10px;color:#27ae60;text-align:center;margin-bottom:5px">
+        🖱 Clique no mapa → CAR / SICAR (todos os estados)
+      </div>
+      <div style="padding:7px 10px;background:rgba(41,128,185,.08);border:1px solid rgba(41,128,185,.2);border-radius:8px;font-size:10px;color:#2980b9;text-align:center">
+        🏛 Busca por código SIGEF ou certificação INCRA abaixo
+      </div>
     </div>
 
     <!-- Instrução inicial -->
@@ -1708,8 +1745,8 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     <!-- Próximas integrações -->
     <div style="padding:0 12px 16px;display:flex;flex-direction:column;gap:6px;flex-shrink:0">
       <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Próximas integrações</div>
-      <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#27ae60"></div><div><div class="fund-card-title">CAR / SICAR</div><div class="fund-card-sub">Clique no mapa para consultar imóveis rurais</div></div><div class="fund-card-badge" style="background:rgba(39,174,96,.15);color:#27ae60;border:1px solid rgba(39,174,96,.3)">✅ Ativo</div></div></div>
-      <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#2980b9"></div><div><div class="fund-card-title">SIGEF / INCRA</div><div class="fund-card-sub">Georreferenciamento de imóveis rurais</div></div><div class="fund-card-badge fund-badge-breve">Em breve</div></div></div>
+      <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#27ae60"></div><div><div class="fund-card-title">CAR / SICAR</div><div class="fund-card-sub">Clique no mapa — todos os 27 estados</div></div><div class="fund-card-badge" style="background:rgba(39,174,96,.15);color:#27ae60;border:1px solid rgba(39,174,96,.3)">✅ Ativo</div></div></div>
+      <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#2980b9"></div><div><div class="fund-card-title">SIGEF / INCRA</div><div class="fund-card-sub">Busca por código + mapa de certificações</div></div><div class="fund-card-badge" style="background:rgba(41,128,185,.15);color:#2980b9;border:1px solid rgba(41,128,185,.3)">✅ Ativo</div></div></div>
       <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#8e44ad"></div><div><div class="fund-card-title">Áreas de Proteção</div><div class="fund-card-sub">APA, UC — SNUC/IBAMA</div></div><div class="fund-card-badge fund-badge-breve">Em breve</div></div></div>
     </div>
 
@@ -4385,6 +4422,10 @@ async function initFundiario() {
   if (_fundLoaded) return;
   _fundLoaded = true;
 
+  // Mostra busca SIGEF
+  const sigefSearch = document.getElementById('fund-sigef-search');
+  if (sigefSearch) sigefSearch.style.display = 'block';
+
   document.getElementById('fund-loading').style.display = 'flex';
   document.getElementById('fund-instrucao').style.display = 'none';
 
@@ -4548,17 +4589,56 @@ function fundSelectLoc(lat, lon, nome) {
 }
 
 // ══════════════════════════════════════════════
-// MÓDULO CAR / SICAR — consulta por clique no mapa
+// MÓDULO CAR / SICAR — nacional, todos os estados
 // ══════════════════════════════════════════════
 const SICAR_WFS = 'https://geoserver.car.gov.br/geoserver/sicar/ows';
 let _carLayer  = null;
 let _carFeats  = [];
+let _sigefLayer = null;
+let _sigefGeojson = null; // cache do GeoJSON SIGEF carregado
 
-// Listener de clique no mapa para o módulo fundiário
+// ── Detecta UF pelo lat/lon ────────────────────
+function _latLonToUF(lat, lon) {
+  const uf = [
+    ['AC',[-11.15,-73.99,-7.12,-66.62]],['AL',[-10.50,-38.23,-8.81,-35.15]],
+    ['AM',[-9.83,-73.80, 2.25,-56.09]],['AP',[-1.25,-51.93, 4.44,-49.87]],
+    ['BA',[-18.36,-46.63,-8.53,-37.34]],['CE',[-7.85,-41.41,-2.77,-37.25]],
+    ['DF',[-16.06,-48.28,-15.50,-47.30]],['ES',[-21.30,-41.88,-17.87,-39.68]],
+    ['GO',[-19.49,-53.25,-12.39,-45.93]],['MA',[-10.26,-48.80,-1.03,-41.82]],
+    ['MG',[-22.93,-51.04,-14.23,-39.86]],['MS',[-24.07,-58.16,-17.15,-50.93]],
+    ['MT',[-18.05,-61.00,-7.34,-50.23]],['PA',[-9.85,-58.90, 2.59,-46.01]],
+    ['PB',[-8.29,-38.82,-6.02,-34.79]],['PE',[-9.48,-41.38,-7.15,-34.86]],
+    ['PI',[-11.81,-45.99,-2.73,-40.37]],['PR',[-26.73,-54.62,-22.51,-48.02]],
+    ['RJ',[-23.38,-44.89,-20.76,-40.95]],['RN',[-6.99,-38.59,-4.82,-35.15]],
+    ['RO',[-13.70,-66.80,-7.96,-59.78]],['RR',[-5.28,-64.41, 5.27,-58.91]],
+    ['RS',[-33.75,-53.68,-27.07,-49.69]],['SC',[-29.37,-53.84,-25.95,-48.36]],
+    ['SE',[-11.57,-38.24,-9.52,-36.40]],['SP',[-25.31,-53.11,-19.78,-44.16]],
+    ['TO',[-13.46,-50.74,-5.16,-45.74]],
+  ];
+  for (const [s,[minLat,minLon,maxLat,maxLon]] of uf) {
+    if (lat>=minLat && lat<=maxLat && lon>=minLon && lon<=maxLon) return s;
+  }
+  return 'RJ'; // fallback
+}
+
+function _carStatusLabel(condicao, statusImovel) {
+  const c = String(condicao||'').toUpperCase();
+  const s = String(statusImovel||'').toUpperCase();
+  if (c.includes('CERTIF') || s==='AT') return {txt:'✅ Certificado', color:'#27ae60'};
+  if (c.includes('CANCEL') || s==='CA') return {txt:'❌ Cancelado',   color:'#e74c3c'};
+  if (c.includes('PEND')   || s==='PE') return {txt:'⏳ Pendente',    color:'#f39c12'};
+  if (c.includes('SUSPENS')|| s==='SU') return {txt:'⚠ Suspenso',    color:'#e67e22'};
+  if (c.includes('ATIVO')  || s==='AT') return {txt:'✅ Ativo',        color:'#27ae60'};
+  return {txt: condicao||statusImovel||'—', color:'var(--sub)'};
+}
+
+// Listener de clique no mapa
 map.on('click', async function(e) {
   if (window._activeTab !== 2) return;
-  if (window._fundMarker || measureMode) return; // não interferir com outras ferramentas
-  await consultarCAR(e.latlng.lat, e.latlng.lng);
+  if (window._fundMarker || measureMode) return;
+  const {lat, lng: lon} = e.latlng;
+  await consultarCAR(lat, lon);
+  await consultarSIGEFPorPonto(lat, lon);
 });
 
 async function consultarCAR(lat, lon) {
@@ -4567,117 +4647,198 @@ async function consultarCAR(lat, lon) {
   const list    = document.getElementById('fund-car-list');
   const empty   = document.getElementById('fund-car-empty');
   const count   = document.getElementById('fund-car-count');
+  const ufEl    = document.getElementById('fund-car-uf');
   const hint    = document.getElementById('fund-car-hint');
 
+  const uf = _latLonToUF(lat, lon);
   panel.style.display   = 'block';
   loading.style.display = 'block';
   list.innerHTML        = '';
   empty.style.display   = 'none';
-  hint.style.display    = 'none';
+  if (hint) hint.style.display = 'none';
   count.textContent     = '';
+  if (ufEl) ufEl.textContent = uf;
 
-  // Limpa camada anterior
   if (_carLayer) { map.removeLayer(_carLayer); _carLayer = null; }
 
   try {
-    // Bbox de ~100m ao redor do ponto
-    const d = 0.0009;
+    const d    = 0.003; // ~330m
     const bbox = `${lon-d},${lat-d},${lon+d},${lat+d},EPSG:4326`;
     const params = new URLSearchParams({
       service:'WFS', version:'2.0.0', request:'GetFeature',
-      typeName:'sicar:sicar_imoveis_rj', outputFormat:'application/json',
-      count:'10', bbox
+      typeName:`sicar:sicar_imoveis_${uf.toLowerCase()}`,
+      outputFormat:'application/json', count:'15', bbox
     });
 
-    const res  = await fetch(`${SICAR_WFS}?${params}`, { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) throw new Error('SICAR indisponível');
-    const data = await res.json();
-    _carFeats  = data.features || [];
-
+    const res = await fetch(`${SICAR_WFS}?${params}`, { signal: AbortSignal.timeout(18000) });
+    if (!res.ok) throw new Error(`SICAR/${uf} indisponível (${res.status})`);
+    const data  = await res.json();
+    _carFeats   = data.features || [];
     loading.style.display = 'none';
 
-    if (!_carFeats.length) {
-      empty.style.display = 'block';
-      return;
-    }
+    if (!_carFeats.length) { empty.style.display = 'block'; return; }
 
-    count.textContent = _carFeats.length + ' imóvel' + (_carFeats.length > 1 ? 'is' : '');
+    count.textContent = _carFeats.length + ' imóvel' + (_carFeats.length>1?'is':'');
 
-    // Desenha polígonos no mapa
     _carLayer = L.geoJSON(data, {
-      style: { color:'#27ae60', weight:2.5, fillColor:'#27ae60', fillOpacity:0.15, dashArray:null },
+      style: { color:'#27ae60', weight:2, fillColor:'#27ae60', fillOpacity:0.12 },
       onEachFeature: (feat, layer) => {
-        const p   = feat.properties || {};
-        const cod = p.cod_imovel || '—';
-        const area = parseFloat(p.area_imovel || p.area || 0).toFixed(2);
-        layer.bindPopup(`<b>🌱 ${cod}</b><br><small>${area} ha</small>`);
-        layer.on('click', () => {
-          document.getElementById('car-item-' + cod.replace(/[^a-z0-9]/gi,'_'))?.scrollIntoView({ behavior:'smooth' });
-        });
+        const p = feat.properties||{};
+        const cod = p.cod_imovel||'—';
+        const area = parseFloat(p.area||0).toFixed(2);
+        layer.bindPopup(`<b>🌱 ${cod}</b><br><small>${area} ha · ${p.municipio||''}</small>`);
+        layer.on('click', () =>
+          document.getElementById('car-item-'+cod.replace(/[^a-z0-9]/gi,'_'))
+            ?.scrollIntoView({behavior:'smooth'})
+        );
       }
     }).addTo(map);
     map.fitBounds(_carLayer.getBounds(), { padding:[40,40], maxZoom:15 });
 
-    // Renderiza cards
     list.innerHTML = _carFeats.map((f, i) => {
-      const p   = f.properties || {};
-      const cod = p.cod_imovel || '—';
-      const area = parseFloat(p.area_imovel || p.area || 0).toFixed(2);
-      const sit = String(p.condicao || p.situacao || '').toLowerCase();
-      const status = sit.includes('certif') ? '✅ Certificado'
-                   : sit.includes('cancel') ? '❌ Cancelado'
-                   : sit.includes('pend')   ? '⏳ Pendente'
-                   : sit ? '📋 ' + sit : '—';
-      const tipo = p.tipo_imovel === 'IRU' ? 'Imóvel Rural' : (p.tipo_imovel || '—');
+      const p    = f.properties||{};
+      const cod  = p.cod_imovel||'—';
+      const area = parseFloat(p.area||0).toFixed(2);
+      const mfis = parseFloat(p.m_fiscal||0).toFixed(2);
+      const st   = _carStatusLabel(p.condicao, p.status_imovel);
+      const tipo = p.tipo_imovel==='IRU' ? 'Imóvel Rural'
+                 : p.tipo_imovel==='APP' ? 'Área de Prot. Permanente'
+                 : p.tipo_imovel==='RES' ? 'Reserva Legal'
+                 : (p.tipo_imovel||'—');
+      const mun  = [p.municipio, p.uf||uf].filter(Boolean).join(' · ');
+      const data_c = p.dat_criacao ? p.dat_criacao.substring(0,10) : '';
       const safeId = cod.replace(/[^a-z0-9]/gi,'_');
-
       return `
-        <div id="car-item-${safeId}" style="background:var(--card);border:1px solid rgba(39,174,96,.3);border-radius:10px;padding:12px;font-size:11px">
-          <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px">
-            <div style="width:8px;height:8px;border-radius:50%;background:#27ae60;flex-shrink:0;margin-top:3px"></div>
-            <div>
-              <div style="font-size:11px;font-weight:700;color:var(--text);word-break:break-all">${cod}</div>
-              <div style="font-size:10px;color:var(--sub);margin-top:1px">${tipo}</div>
-            </div>
+      <div id="car-item-${safeId}" style="background:var(--card);border:1px solid rgba(39,174,96,.25);border-radius:10px;padding:12px;font-size:11px">
+        <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px">
+          <div style="width:8px;height:8px;border-radius:50%;background:#27ae60;flex-shrink:0;margin-top:3px"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:10px;font-weight:700;color:var(--text);word-break:break-all;line-height:1.3">${cod}</div>
+            <div style="font-size:9px;color:var(--sub);margin-top:1px">${tipo} · ${mun}</div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:10px">
-            <div style="background:var(--card2);border-radius:6px;padding:6px 8px">
-              <div style="font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px">Área</div>
-              <div style="font-size:12px;font-weight:700;color:var(--text)">${area} ha</div>
-            </div>
-            <div style="background:var(--card2);border-radius:6px;padding:6px 8px">
-              <div style="font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px">Status</div>
-              <div style="font-size:11px;font-weight:600;color:var(--text)">${status}</div>
-            </div>
+          <span style="font-size:9px;font-weight:700;color:${st.color};white-space:nowrap">${st.txt}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:10px">
+          <div style="background:var(--card2);border-radius:6px;padding:5px 7px">
+            <div style="font-size:7px;color:var(--dim);text-transform:uppercase">Área</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text)">${area} ha</div>
           </div>
-          <div style="display:flex;gap:6px">
-            <button onclick="_carZoom(${i})" style="flex:1;padding:7px 0;background:rgba(39,174,96,.12);color:#27ae60;border:1px solid rgba(39,174,96,.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
-              🎯 Ver no mapa
-            </button>
-            <button onclick="_downloadCarKml(${i})" style="flex:1;padding:7px 0;background:rgba(26,115,232,.12);color:#1a73e8;border:1px solid rgba(26,115,232,.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
-              ⬇ KML
-            </button>
+          <div style="background:var(--card2);border-radius:6px;padding:5px 7px">
+            <div style="font-size:7px;color:var(--dim);text-transform:uppercase">Módulos</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text)">${mfis}</div>
           </div>
-        </div>`;
+          <div style="background:var(--card2);border-radius:6px;padding:5px 7px">
+            <div style="font-size:7px;color:var(--dim);text-transform:uppercase">Cadastro</div>
+            <div style="font-size:10px;font-weight:600;color:var(--text)">${data_c||'—'}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:5px">
+          <button onclick="_carZoom(${i})" style="flex:1;padding:6px 0;background:rgba(39,174,96,.12);color:#27ae60;border:1px solid rgba(39,174,96,.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">🎯 Mapa</button>
+          <button onclick="_downloadCarKml(${i})" style="flex:1;padding:6px 0;background:rgba(26,115,232,.1);color:#1a73e8;border:1px solid rgba(26,115,232,.25);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">⬇ KML</button>
+          <a href="https://www.car.gov.br/publico/imoveis/index?codigoImovel=${encodeURIComponent(cod)}" target="_blank"
+            style="flex:1;padding:6px 0;background:rgba(243,156,18,.1);color:#f39c12;border:1px solid rgba(243,156,18,.25);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;text-decoration:none;text-align:center">🔗 SICAR</a>
+        </div>
+      </div>`;
     }).join('');
 
   } catch(err) {
     loading.style.display = 'none';
     empty.style.display   = 'block';
-    empty.textContent     = '⚠️ Erro ao consultar SICAR: ' + (err.message || 'tente novamente');
+    empty.innerHTML = `<div style="color:var(--sub)">⚠ SICAR/${uf}: ${err.message||'tente novamente'}</div>`;
     console.error('[CAR]', err);
   }
 }
 
 function _carZoom(idx) {
   const feat = _carFeats[idx];
-  if (!feat || !_carLayer) return;
+  if (!feat||!_carLayer) return;
   _carLayer.eachLayer(l => {
-    if (l.feature === feat) {
-      map.fitBounds(l.getBounds(), { padding:[30,30], maxZoom:16 });
-      l.openPopup();
-    }
+    if (l.feature===feat) { map.fitBounds(l.getBounds(),{padding:[30,30],maxZoom:16}); l.openPopup(); }
   });
+}
+
+// ══════════════════════════════════════════════
+// MÓDULO SIGEF / INCRA
+// ══════════════════════════════════════════════
+async function consultarSIGEFPorPonto(lat, lon) {
+  const panel   = document.getElementById('fund-sigef-panel');
+  const loading = document.getElementById('fund-sigef-loading');
+  const list    = document.getElementById('fund-sigef-list');
+  const empty   = document.getElementById('fund-sigef-empty');
+  const count   = document.getElementById('fund-sigef-count');
+  const link    = document.getElementById('fund-sigef-link');
+
+  panel.style.display   = 'block';
+  loading.style.display = 'block';
+  list.innerHTML        = '';
+  empty.style.display   = 'none';
+  count.textContent     = '';
+
+  // Atualiza link do INCRA com coordenadas
+  if (link) link.href = `https://certificacao.incra.gov.br/csv_shp/export.py`;
+
+  // Tenta buscar do GeoJSON SIGEF armazenado no Supabase Storage
+  if (!_sigefGeojson) {
+    try {
+      const supaURL = Deno?.env ? null : (window.SUPABASE_URL || SUPABASE_REST?.replace('/rest/v1',''));
+      const storageUrl = supaURL
+        ? `${supaURL}/storage/v1/object/public/sigef/sigef_certificados.geojson`
+        : `${SUPABASE_REST.replace('/rest/v1','')}/storage/v1/object/public/sigef/sigef_certificados.geojson`;
+      const r = await fetch(storageUrl, { signal: AbortSignal.timeout(8000) });
+      if (r.ok) _sigefGeojson = await r.json();
+    } catch { /* sem dados SIGEF carregados */ }
+  }
+
+  if (_sigefGeojson?.features?.length) {
+    // Filtra features próximas ao ponto (bbox simples)
+    const d = 0.01;
+    const nearby = _sigefGeojson.features.filter(f => {
+      if (!f.geometry) return false;
+      const coords = f.geometry.type==='Polygon' ? f.geometry.coordinates[0]
+                   : f.geometry.type==='MultiPolygon' ? f.geometry.coordinates[0][0] : [];
+      return coords.some(([x,y]) => Math.abs(x-lon)<d && Math.abs(y-lat)<d);
+    });
+
+    loading.style.display = 'none';
+
+    if (nearby.length) {
+      count.textContent = nearby.length + ' parcela' + (nearby.length>1?'s':'');
+      if (_sigefLayer) map.removeLayer(_sigefLayer);
+      _sigefLayer = L.geoJSON({type:'FeatureCollection',features:nearby},{
+        style:{color:'#2980b9',weight:2,fillColor:'#2980b9',fillOpacity:0.12}
+      }).addTo(map);
+
+      list.innerHTML = nearby.map(f => {
+        const p = f.properties||{};
+        return `<div style="background:var(--card);border:1px solid rgba(41,128,185,.25);border-radius:9px;padding:10px 12px;font-size:11px">
+          <div style="font-weight:700;color:var(--text);margin-bottom:4px;word-break:break-all">${p.codigo||p.parcela_codigo||'—'}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+            <div style="background:var(--card2);border-radius:5px;padding:4px 7px">
+              <div style="font-size:8px;color:var(--dim)">Área (ha)</div>
+              <div style="font-size:11px;font-weight:700">${parseFloat(p.area_ha||p.area||0).toFixed(2)}</div>
+            </div>
+            <div style="background:var(--card2);border-radius:5px;padding:4px 7px">
+              <div style="font-size:8px;color:var(--dim)">Município</div>
+              <div style="font-size:10px;font-weight:600">${p.municipio||p.nome_municipio||'—'}</div>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+      return;
+    }
+  }
+
+  loading.style.display = 'none';
+  empty.style.display   = 'block';
+}
+
+function sigefBuscarCodigo() {
+  const cod = (document.getElementById('fund-sigef-cod')?.value||'').trim();
+  if (!cod) { toast('Digite um código SIGEF', 'warn'); return; }
+  // Abre consulta no portal INCRA
+  const url = `https://certificacao.incra.gov.br/csv_shp/export.py?tipo=Parcela_Certificada&codigo=${encodeURIComponent(cod)}`;
+  window.open(url, '_blank');
+  toast('Abrindo consulta SIGEF no portal INCRA…', 'ok');
 }
 
 // ── Converte GeoJSON geometry → KML ──────────────────────────
