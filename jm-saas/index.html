@@ -4537,16 +4537,19 @@ function fundSetMode(mode) {
     if (mode === 'municipios') {
       if (_carLayer)   { map.removeLayer(_carLayer);   _carLayer   = null; }
       if (_sigefLayer) { map.removeLayer(_sigefLayer); _sigefLayer = null; }
+      _carRemoveWms();
       _sigefRemoveWms();
       if (_fundLayer)  { if (!map.hasLayer(_fundLayer)) map.addLayer(_fundLayer); }
     } else if (mode === 'car') {
       if (_fundLayer && map.hasLayer(_fundLayer)) map.removeLayer(_fundLayer);
       if (_sigefLayer) { map.removeLayer(_sigefLayer); _sigefLayer = null; }
       _sigefRemoveWms();
+      // _carWmsLayer gerenciado por _carSetupWms()
     } else if (mode === 'sigef') {
       if (_fundLayer && map.hasLayer(_fundLayer)) map.removeLayer(_fundLayer);
       if (_carLayer)   { map.removeLayer(_carLayer);   _carLayer   = null; }
-      _sigefAddWms(); // ativa WMS visual do INCRA/SIGEF
+      _carRemoveWms();
+      _sigefAddWms();
     }
   } catch(e) { console.warn('[fundSetMode] layer err:', e); }
 
@@ -4558,7 +4561,7 @@ function fundSetMode(mode) {
   show('fund-sigef-panel', false); // idem
   show('fund-sigef-search', mode === 'sigef');
 
-  if (mode === 'car')   { toast('🌱 CAR ativo — carregando imóveis da área…', 'ok'); setTimeout(consultarCARViewport, 350); }
+  if (mode === 'car')   { toast('🌱 CAR ativo — imóveis SICAR visíveis no mapa', 'ok'); _carSetupWms(); }
   if (mode === 'sigef') toast('🏛 SIGEF ativo — use a busca por código ou clique no mapa', 'ok');
 }
 
@@ -4677,8 +4680,10 @@ function fundSelectLoc(lat, lon, nome) {
 // MÓDULO CAR / SICAR — nacional, todos os estados
 // ══════════════════════════════════════════════
 const SICAR_WFS = 'https://geoserver.car.gov.br/geoserver/sicar/ows';
-let _carLayer  = null;
-let _carFeats  = [];
+let _carLayer    = null;   // GeoJSON de detalhe (ponto clicado)
+let _carWmsLayer = null;   // WMS tile — visual geral
+let _carWmsUf    = '';     // UF atual do WMS
+let _carFeats    = [];
 let _sigefLayer   = null;
 let _sigefGeojson = null;  // cache do GeoJSON SIGEF (upload manual)
 let _sigefWmsLayer = null; // camada WMS visual INCRA/SIGEF
@@ -4708,6 +4713,34 @@ function _sigefRemoveWms() {
   try { map.removeLayer(_sigefWmsLayer); } catch(e) {}
   _sigefWmsLayer = null;
   _sigefWmsOk   = false;
+}
+
+// ── CAR WMS tiles — exibe polígonos sem CORS, sem limite de features ──
+function _carSetupWms() {
+  if (_fundMode !== 'car') return;
+  const uf = _latLonToUF(map.getCenter().lat, map.getCenter().lng).toLowerCase();
+  // Mesmo estado? Só reconstrói se mudou ou não existe
+  if (_carWmsLayer && _carWmsUf === uf) return;
+  if (_carWmsLayer) { try { map.removeLayer(_carWmsLayer); } catch(e) {} _carWmsLayer = null; }
+  _carWmsUf = uf;
+  try {
+    _carWmsLayer = L.tileLayer.wms(SICAR_WFS, {
+      layers: `sicar:sicar_imoveis_${uf}`,
+      format: 'image/png',
+      transparent: true,
+      version: '1.1.1',
+      opacity: 0.85
+    });
+    _carWmsLayer.addTo(map);
+    const hint = document.getElementById('fund-mode-hint');
+    if (hint) hint.textContent = `🌱 CAR/${uf.toUpperCase()} carregando… clique em um imóvel para detalhes`;
+  } catch(e) { console.warn('[SICAR WMS]', e); }
+}
+
+function _carRemoveWms() {
+  if (!_carWmsLayer) return;
+  try { map.removeLayer(_carWmsLayer); } catch(e) {}
+  _carWmsLayer = null; _carWmsUf = '';
 }
 
 // ── Detecta UF pelo lat/lon ────────────────────
@@ -4751,7 +4784,7 @@ let _carMoveTimer = null;
 map.on('moveend', () => {
   if (_fundMode !== 'car') return;
   clearTimeout(_carMoveTimer);
-  _carMoveTimer = setTimeout(consultarCARViewport, 1400);
+  _carMoveTimer = setTimeout(_carSetupWms, 900); // atualiza WMS se mudou de estado
 });
 
 // ── CAR: carrega todos os polígonos da área visível ──
@@ -4912,12 +4945,12 @@ async function consultarCAR(lat, lon) {
   if (_fundLayer && map.hasLayer(_fundLayer)) map.removeLayer(_fundLayer);
 
   try {
-    const d    = 0.003; // ~330m
+    const d    = 0.006; // ~660m — cobre imóveis médios/grandes
     const bbox = `${lon-d},${lat-d},${lon+d},${lat+d},EPSG:4326`;
     const params = new URLSearchParams({
       service:'WFS', version:'2.0.0', request:'GetFeature',
       typeName:`sicar:sicar_imoveis_${uf.toLowerCase()}`,
-      outputFormat:'application/json', count:'15', bbox
+      outputFormat:'application/json', count:'20', bbox
     });
 
     const res = await fetch(`${SICAR_WFS}?${params}`, { signal: AbortSignal.timeout(18000) });
@@ -4931,7 +4964,8 @@ async function consultarCAR(lat, lon) {
     count.textContent = _carFeats.length + ' imóvel' + (_carFeats.length>1?'is':'');
 
     _carLayer = L.geoJSON(data, {
-      style: { color:'#27ae60', weight:2, fillColor:'#27ae60', fillOpacity:0.12 },
+      // Destaque sobre o WMS: borda forte + preenchimento semi-transparente
+      style: { color:'#f39c12', weight:3, fillColor:'#27ae60', fillOpacity:0.35 },
       onEachFeature: (feat, layer) => {
         const p = feat.properties||{};
         const cod = p.cod_imovel||'—';
@@ -4943,7 +4977,7 @@ async function consultarCAR(lat, lon) {
         );
       }
     }).addTo(map);
-    map.fitBounds(_carLayer.getBounds(), { padding:[40,40], maxZoom:15 });
+    map.fitBounds(_carLayer.getBounds(), { padding:[40,40], maxZoom:16 });
 
     list.innerHTML = _carFeats.map((f, i) => {
       const p    = f.properties||{};
