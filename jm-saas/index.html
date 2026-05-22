@@ -1699,13 +1699,28 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       </div>
     </div>
 
-    <!-- Dica de clique (CAR + SIGEF) -->
-    <div id="fund-car-hint" style="margin:0 12px 8px;flex-shrink:0">
-      <div style="padding:8px 10px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.2);border-radius:8px;font-size:10px;color:#27ae60;text-align:center;margin-bottom:5px">
-        🖱 Clique no mapa → CAR / SICAR (todos os estados)
+    <!-- Controles de modo CAR -->
+    <div id="fund-car-hint" style="margin:0 12px 8px;flex-shrink:0;display:flex;flex-direction:column;gap:5px">
+      <!-- Modo municípios (padrão) -->
+      <div id="fund-mode-mun" style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.2);border-radius:8px">
+        <span style="font-size:10px;color:var(--sub);flex:1">🗺 Modo: municípios RJ</span>
+        <button onclick="fundAtivarModoCAR()"
+          style="padding:5px 10px;background:rgba(39,174,96,.15);color:#27ae60;border:1px solid rgba(39,174,96,.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap">
+          🌱 Ativar CAR
+        </button>
       </div>
+      <!-- Modo CAR (ativo) -->
+      <div id="fund-mode-car" style="display:none;align-items:center;gap:6px;padding:8px 10px;background:rgba(39,174,96,.1);border:1px solid rgba(39,174,96,.35);border-radius:8px">
+        <div style="width:7px;height:7px;border-radius:50%;background:#27ae60;animation:pulse 1.2s infinite"></div>
+        <span style="font-size:10px;color:#27ae60;flex:1;font-weight:700">Clique no mapa → consulta CAR</span>
+        <button onclick="fundVoltarMunicipios()"
+          style="padding:5px 10px;background:var(--card2);color:var(--sub);border:1px solid var(--border2);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
+          ← Municípios
+        </button>
+      </div>
+      <!-- SIGEF hint -->
       <div style="padding:7px 10px;background:rgba(41,128,185,.08);border:1px solid rgba(41,128,185,.2);border-radius:8px;font-size:10px;color:#2980b9;text-align:center">
-        🏛 Busca por código SIGEF ou certificação INCRA abaixo
+        🏛 Busca por código SIGEF abaixo
       </div>
     </div>
 
@@ -4417,6 +4432,7 @@ let _fundSelected = null;
 let _fundPlantas  = {};
 let _fundGeoJSON  = null;
 let _fundLoaded   = false;
+let _fundModoCAR  = false; // false = municípios, true = consulta CAR
 
 async function initFundiario() {
   if (_fundLoaded) return;
@@ -4472,8 +4488,43 @@ function _fundOnEach(feature, layer) {
   layer.on({
     mouseover: e => { if (_fundSelected !== e.target) e.target.setStyle(_fundStyleHover()); },
     mouseout:  e => { if (_fundSelected !== e.target) e.target.setStyle(_fundStyleDefault()); },
-    click:     ()  => { if (drawToolActive || measureMode) return; _selecionarMunicipio(feature, layer); }
+    click: e => {
+      if (drawToolActive || measureMode) return;
+      if (_fundModoCAR) return; // no modo CAR, clique passa pro mapa
+      L.DomEvent.stopPropagation(e); // evita duplo disparo no modo município
+      _selecionarMunicipio(feature, layer);
+    }
   });
+}
+
+function fundAtivarModoCAR() {
+  _fundModoCAR = true;
+  // Oculta camada de municípios
+  if (_fundLayer) map.removeLayer(_fundLayer);
+  // Limpa painel de município
+  const munPanel = document.getElementById('fund-mun-panel');
+  if (munPanel) munPanel.style.display = 'none';
+  document.getElementById('fund-instrucao').style.display = 'none';
+  // Alterna indicadores de modo
+  document.getElementById('fund-mode-mun').style.display = 'none';
+  document.getElementById('fund-mode-car').style.display = 'flex';
+  toast('Modo CAR ativo — clique no mapa para consultar imóveis', 'ok');
+}
+
+function fundVoltarMunicipios() {
+  _fundModoCAR = false;
+  // Remove camada CAR
+  if (_carLayer)  { map.removeLayer(_carLayer);  _carLayer = null; }
+  if (_sigefLayer){ map.removeLayer(_sigefLayer); _sigefLayer = null; }
+  // Recoloca municípios
+  if (_fundLayer && !map.hasLayer(_fundLayer)) map.addLayer(_fundLayer);
+  // Oculta painéis CAR/SIGEF
+  document.getElementById('fund-car-panel').style.display   = 'none';
+  document.getElementById('fund-sigef-panel').style.display = 'none';
+  document.getElementById('fund-instrucao').style.display   = 'block';
+  // Alterna indicadores de modo
+  document.getElementById('fund-mode-mun').style.display = 'flex';
+  document.getElementById('fund-mode-car').style.display = 'none';
 }
 
 function _selecionarMunicipio(feature, layer) {
@@ -4635,7 +4686,8 @@ function _carStatusLabel(condicao, statusImovel) {
 // Listener de clique no mapa
 map.on('click', async function(e) {
   if (window._activeTab !== 2) return;
-  if (window._fundMarker || measureMode) return;
+  if (measureMode || drawToolActive) return;
+  if (!_fundModoCAR) return; // só consulta CAR quando modo CAR ativo
   const {lat, lng: lon} = e.latlng;
   await consultarCAR(lat, lon);
   await consultarSIGEFPorPonto(lat, lon);
@@ -4660,6 +4712,8 @@ async function consultarCAR(lat, lon) {
   if (ufEl) ufEl.textContent = uf;
 
   if (_carLayer) { map.removeLayer(_carLayer); _carLayer = null; }
+  // Garante que municípios ficam ocultos durante consulta CAR
+  if (_fundLayer && map.hasLayer(_fundLayer)) map.removeLayer(_fundLayer);
 
   try {
     const d    = 0.003; // ~330m
