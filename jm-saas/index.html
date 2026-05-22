@@ -1757,8 +1757,8 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     <!-- Próximas integrações -->
     <div style="padding:0 12px 16px;display:flex;flex-direction:column;gap:6px;flex-shrink:0">
       <div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Próximas integrações</div>
-      <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#27ae60"></div><div><div class="fund-card-title">CAR / SICAR</div><div class="fund-card-sub">Clique no mapa — todos os 27 estados</div></div><div class="fund-card-badge" style="background:rgba(39,174,96,.15);color:#27ae60;border:1px solid rgba(39,174,96,.3)">✅ Ativo</div></div></div>
-      <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#2980b9"></div><div><div class="fund-card-title">SIGEF / INCRA</div><div class="fund-card-sub">Busca por código + mapa de certificações</div></div><div class="fund-card-badge" style="background:rgba(41,128,185,.15);color:#2980b9;border:1px solid rgba(41,128,185,.3)">✅ Ativo</div></div></div>
+      <div class="fund-card" onclick="fundSetMode('car')" style="cursor:pointer" title="Clique para ativar o modo CAR"><div class="fund-card-header"><div class="fund-card-dot" style="background:#27ae60"></div><div><div class="fund-card-title">CAR / SICAR</div><div class="fund-card-sub">Clique aqui → ativa modo CAR no mapa</div></div><div class="fund-card-badge" style="background:rgba(39,174,96,.15);color:#27ae60;border:1px solid rgba(39,174,96,.3)">✅ Ativo</div></div></div>
+      <div class="fund-card" onclick="fundSetMode('sigef')" style="cursor:pointer" title="Clique para ativar o modo SIGEF"><div class="fund-card-header"><div class="fund-card-dot" style="background:#2980b9"></div><div><div class="fund-card-title">SIGEF / INCRA</div><div class="fund-card-sub">Clique aqui → ativa modo SIGEF</div></div><div class="fund-card-badge" style="background:rgba(41,128,185,.15);color:#2980b9;border:1px solid rgba(41,128,185,.3)">✅ Ativo</div></div></div>
       <div class="fund-card"><div class="fund-card-header"><div class="fund-card-dot" style="background:#8e44ad"></div><div><div class="fund-card-title">Áreas de Proteção</div><div class="fund-card-sub">APA, UC — SNUC/IBAMA</div></div><div class="fund-card-badge fund-badge-breve">Em breve</div></div></div>
     </div>
 
@@ -4435,9 +4435,6 @@ async function initFundiario() {
   if (_fundLoaded) return;
   _fundLoaded = true;
 
-  // Aplica modo padrão (municípios)
-  fundSetMode('municipios');
-
   document.getElementById('fund-loading').style.display = 'flex';
   document.getElementById('fund-instrucao').style.display = 'none';
 
@@ -4463,6 +4460,8 @@ async function initFundiario() {
     document.getElementById('fund-contador').textContent =
       `${total} municípios · ${comPlanta} com plantas cadastradas`;
 
+    // Agora que o layer existe, aplica modo padrão
+    fundSetMode('municipios');
     toast(`${total} municípios do RJ carregados`, 'ok');
 
   } catch(e) {
@@ -4529,29 +4528,30 @@ function fundSetMode(mode) {
     hint.style.color    = h.color;
   }
 
-  // ── Camadas no mapa ──
-  if (mode === 'municipios') {
-    // Mostra municípios, remove CAR e SIGEF
-    if (_fundLayer && !map.hasLayer(_fundLayer)) map.addLayer(_fundLayer);
-    if (_carLayer)   { map.removeLayer(_carLayer);   _carLayer   = null; }
-    if (_sigefLayer) { map.removeLayer(_sigefLayer); _sigefLayer = null; }
-  } else {
-    // Esconde municípios
-    if (_fundLayer && map.hasLayer(_fundLayer)) map.removeLayer(_fundLayer);
-    if (mode === 'car'   && _sigefLayer) { map.removeLayer(_sigefLayer); _sigefLayer = null; }
-    if (mode === 'sigef' && _carLayer)   { map.removeLayer(_carLayer);   _carLayer   = null; }
-  }
+  // ── Camadas no mapa (sempre executa, independente do estado) ──
+  try {
+    if (mode === 'municipios') {
+      if (_carLayer)   { map.removeLayer(_carLayer);   _carLayer   = null; }
+      if (_sigefLayer) { map.removeLayer(_sigefLayer); _sigefLayer = null; }
+      if (_fundLayer)  { if (!map.hasLayer(_fundLayer)) map.addLayer(_fundLayer); }
+    } else {
+      // qualquer outro modo → remove municípios do mapa
+      if (_fundLayer && map.hasLayer(_fundLayer)) map.removeLayer(_fundLayer);
+      if (mode === 'car'   && _sigefLayer) { map.removeLayer(_sigefLayer); _sigefLayer = null; }
+      if (mode === 'sigef' && _carLayer)   { map.removeLayer(_carLayer);   _carLayer   = null; }
+    }
+  } catch(e) { console.warn('[fundSetMode] layer err:', e); }
 
-  // ── Painéis ──
-  document.getElementById('fund-mun-panel').style.display    = mode==='municipios' ? '' : 'none';
-  document.getElementById('fund-instrucao').style.display    = mode==='municipios' ? 'block' : 'none';
-  document.getElementById('fund-car-panel').style.display    = mode==='car'   ? '' : 'none';
-  document.getElementById('fund-sigef-panel').style.display  = mode==='sigef' ? '' : 'none';
-  const sigefSearch = document.getElementById('fund-sigef-search');
-  if (sigefSearch) sigefSearch.style.display = mode==='sigef' ? 'block' : 'none';
+  // ── Painéis sidebar ──
+  const show = (id, vis) => { const el=document.getElementById(id); if(el) el.style.display = vis ? 'block' : 'none'; };
+  show('fund-mun-panel',   mode === 'municipios');
+  show('fund-instrucao',   mode === 'municipios');
+  show('fund-car-panel',   false); // só aparece após query retornar resultado
+  show('fund-sigef-panel', false); // idem
+  show('fund-sigef-search', mode === 'sigef');
 
-  if (mode === 'car')   toast('🌱 Modo CAR — clique no mapa para consultar', 'ok');
-  if (mode === 'sigef') toast('🏛 Modo SIGEF — consulta por código ou clique', 'ok');
+  if (mode === 'car')   toast('🌱 CAR ativo — clique no mapa para consultar imóvel', 'ok');
+  if (mode === 'sigef') toast('🏛 SIGEF ativo — use a busca por código abaixo', 'ok');
 }
 
 function _selecionarMunicipio(feature, layer) {
