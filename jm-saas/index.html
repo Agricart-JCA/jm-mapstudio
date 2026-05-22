@@ -4558,8 +4558,8 @@ function fundSetMode(mode) {
   show('fund-sigef-panel', false); // idem
   show('fund-sigef-search', mode === 'sigef');
 
-  if (mode === 'car')   toast('🌱 CAR ativo — clique no mapa para consultar imóvel', 'ok');
-  if (mode === 'sigef') toast('🏛 SIGEF ativo — use a busca por código abaixo', 'ok');
+  if (mode === 'car')   { toast('🌱 CAR ativo — carregando imóveis da área…', 'ok'); setTimeout(consultarCARViewport, 350); }
+  if (mode === 'sigef') toast('🏛 SIGEF ativo — use a busca por código ou clique no mapa', 'ok');
 }
 
 function _selecionarMunicipio(feature, layer) {
@@ -4745,14 +4745,144 @@ function _carStatusLabel(condicao, statusImovel) {
   return {txt: condicao||statusImovel||'—', color:'var(--sub)'};
 }
 
+// ── Auto-refresh CAR ao mover/zoom ──────────────
+let _carVpPending = false;
+let _carMoveTimer = null;
+map.on('moveend', () => {
+  if (_fundMode !== 'car') return;
+  clearTimeout(_carMoveTimer);
+  _carMoveTimer = setTimeout(consultarCARViewport, 1400);
+});
+
+// ── CAR: carrega todos os polígonos da área visível ──
+async function consultarCARViewport() {
+  if (_fundMode !== 'car') return;
+  if (_carVpPending) return;
+  const zoom = map.getZoom();
+  const hint = document.getElementById('fund-mode-hint');
+  if (zoom < 9) {
+    if (hint) hint.textContent = '🌱 CAR ativo — dê zoom in para ver os imóveis';
+    return;
+  }
+  _carVpPending = true;
+  if (hint) hint.textContent = '🔄 Consultando SICAR…';
+  if (_carLayer) { map.removeLayer(_carLayer); _carLayer = null; }
+  _carFeats = [];
+  try {
+    const b  = map.getBounds();
+    const uf = _latLonToUF(map.getCenter().lat, map.getCenter().lng);
+    const bbox = `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()},EPSG:4326`;
+    const params = new URLSearchParams({
+      service:'WFS', version:'2.0.0', request:'GetFeature',
+      typeName:`sicar:sicar_imoveis_${uf.toLowerCase()}`,
+      outputFormat:'application/json', count:'400', bbox
+    });
+    const res = await fetch(`${SICAR_WFS}?${params}`, { signal: AbortSignal.timeout(22000) });
+    if (!res.ok) throw new Error(`SICAR/${uf} HTTP ${res.status}`);
+    const data = await res.json();
+    if (_fundMode !== 'car') return; // saiu do modo durante o carregamento
+    _carFeats = data.features || [];
+    if (!_carFeats.length) {
+      if (hint) hint.textContent = '🌱 Sem imóveis CAR nesta área — navegue ou zoom in';
+      return;
+    }
+    _carLayer = L.geoJSON(data, {
+      style: f => {
+        const p = f.properties||{};
+        const st = _carStatusLabel(p.condicao, p.status_imovel);
+        const col = st.color === '#27ae60' ? '#27ae60'
+                  : st.color === '#e74c3c' ? '#e74c3c' : '#f39c12';
+        return { color:col, weight:1.5, fillColor:col, fillOpacity:0.16 };
+      },
+      onEachFeature: (feat, layer) => {
+        const p = feat.properties||{};
+        const cod  = p.cod_imovel||'—';
+        const area = parseFloat(p.area||0).toFixed(2);
+        layer.bindPopup(`<b>🌱 ${cod}</b><br><small>${area} ha · ${p.municipio||''}</small><br><span style="font-size:10px;color:#27ae60;font-weight:700">← clique para detalhes</span>`);
+        layer.on('click', e => {
+          L.DomEvent.stopPropagation(e);
+          const idx = _carFeats.indexOf(feat);
+          _carMostrarNoSidebar(idx >= 0 ? idx : 0, feat);
+        });
+      }
+    }).addTo(map);
+    if (hint) hint.textContent = `🌱 ${_carFeats.length} imóveis CAR/${uf} — clique em um para detalhes`;
+  } catch(err) {
+    if (hint) hint.textContent = `⚠ ${err.message.substring(0,50)}`;
+    console.error('[CAR viewport]', err);
+  } finally {
+    _carVpPending = false;
+  }
+}
+
+// ── CAR: mostra detalhes de 1 imóvel no sidebar ──
+function _carMostrarNoSidebar(idx, feat) {
+  const panel   = document.getElementById('fund-car-panel');
+  const list    = document.getElementById('fund-car-list');
+  const count   = document.getElementById('fund-car-count');
+  const ufEl    = document.getElementById('fund-car-uf');
+  const empty   = document.getElementById('fund-car-empty');
+  const loading = document.getElementById('fund-car-loading');
+  panel.style.display   = 'block';
+  empty.style.display   = 'none';
+  loading.style.display = 'none';
+  const p   = feat.properties||{};
+  const cod = p.cod_imovel||'—';
+  const area = parseFloat(p.area||0).toFixed(2);
+  const mfis = parseFloat(p.m_fiscal||0).toFixed(2);
+  const st   = _carStatusLabel(p.condicao, p.status_imovel);
+  const tipo = p.tipo_imovel==='IRU' ? 'Imóvel Rural'
+             : p.tipo_imovel==='APP' ? 'Área de Prot. Permanente'
+             : p.tipo_imovel==='RES' ? 'Reserva Legal'
+             : (p.tipo_imovel||'—');
+  const mun    = [p.municipio, p.uf||''].filter(Boolean).join(' · ');
+  const data_c = p.dat_criacao ? p.dat_criacao.substring(0,10) : '';
+  const safeId = cod.replace(/[^a-z0-9]/gi,'_');
+  if (ufEl) ufEl.textContent = p.uf||'';
+  count.textContent = '1 imóvel';
+  list.innerHTML = `
+  <div id="car-item-${safeId}" style="background:var(--card);border:1px solid rgba(39,174,96,.25);border-radius:10px;padding:12px;font-size:11px">
+    <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px">
+      <div style="width:8px;height:8px;border-radius:50%;background:#27ae60;flex-shrink:0;margin-top:3px"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:10px;font-weight:700;color:var(--text);word-break:break-all;line-height:1.3">${cod}</div>
+        <div style="font-size:9px;color:var(--sub);margin-top:1px">${tipo} · ${mun}</div>
+      </div>
+      <span style="font-size:9px;font-weight:700;color:${st.color};white-space:nowrap">${st.txt}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:10px">
+      <div style="background:var(--card2);border-radius:6px;padding:5px 7px">
+        <div style="font-size:7px;color:var(--dim);text-transform:uppercase">Área</div>
+        <div style="font-size:11px;font-weight:700;color:var(--text)">${area} ha</div>
+      </div>
+      <div style="background:var(--card2);border-radius:6px;padding:5px 7px">
+        <div style="font-size:7px;color:var(--dim);text-transform:uppercase">Módulos</div>
+        <div style="font-size:11px;font-weight:700;color:var(--text)">${mfis}</div>
+      </div>
+      <div style="background:var(--card2);border-radius:6px;padding:5px 7px">
+        <div style="font-size:7px;color:var(--dim);text-transform:uppercase">Cadastro</div>
+        <div style="font-size:10px;font-weight:600;color:var(--text)">${data_c||'—'}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:5px">
+      <button onclick="_carZoom(${idx})" style="flex:1;padding:6px 0;background:rgba(39,174,96,.12);color:#27ae60;border:1px solid rgba(39,174,96,.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">🎯 Mapa</button>
+      <button onclick="_downloadCarKml(${idx})" style="flex:1;padding:6px 0;background:rgba(26,115,232,.1);color:#1a73e8;border:1px solid rgba(26,115,232,.25);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">⬇ KML</button>
+      <a href="https://www.car.gov.br/publico/imoveis/index?codigoImovel=${encodeURIComponent(cod)}" target="_blank"
+        style="flex:1;padding:6px 0;background:rgba(243,156,18,.1);color:#f39c12;border:1px solid rgba(243,156,18,.25);border-radius:6px;font-size:10px;font-weight:700;text-decoration:none;text-align:center">🔗 SICAR</a>
+    </div>
+  </div>`;
+  // Abre sidebar em mobile; no desktop já está visível
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('open');
+}
+
 // Listener de clique no mapa
 map.on('click', async function(e) {
   if (window._activeTab !== 2) return;
   if (measureMode || drawToolActive) return;
   const {lat, lng: lon} = e.latlng;
   if (_fundMode === 'car') {
-    await consultarCAR(lat, lon);
-    await consultarSIGEFPorPonto(lat, lon);
+    await consultarCAR(lat, lon); // clique pontual — mostra detalhes do ponto
   } else if (_fundMode === 'sigef') {
     await consultarSIGEFPorPonto(lat, lon);
   }
