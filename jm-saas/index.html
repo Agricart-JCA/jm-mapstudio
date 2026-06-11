@@ -1109,13 +1109,34 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
         Sem acesso? <a href="#" class="lf-action-link" id="link-register" onclick="event.preventDefault();showRegisterStep()">Assinar agora</a>
       </p>
       <p style="margin-top:8px;text-align:center;font-size:11px;color:var(--sub)">
-        <a href="forgot-password.html" class="lf-action-link">Esqueci minha senha</a>
+        <a href="#" class="lf-action-link" onclick="event.preventDefault();showForgotStep()">Esqueci minha senha</a>
       </p>
       <div id="login-footer">
         <strong>JM Topografia e Engenharia</strong><br>
         Sistema de uso interno · Acesso autorizado apenas<br>
         Contato: comercial@jmtopografiaeng.com
       </div>
+    </div>
+
+    <!-- ─ ESQUECI MINHA SENHA ─ -->
+    <div id="step-forgot" style="width:100%;display:none">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:22px;margin-bottom:8px">🔑</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text)">Recuperar senha</div>
+        <div style="font-size:11px;color:var(--sub);margin-top:4px;line-height:1.6">
+          Digite seu e-mail e enviaremos um link<br>para você criar uma nova senha
+        </div>
+      </div>
+      <div class="lf-grp">
+        <label class="lf-lbl" for="fg-email">E-mail cadastrado</label>
+        <input class="lf-inp" type="email" id="fg-email" placeholder="seu@email.com" autocomplete="email"
+               onkeydown="if(event.key==='Enter')doForgotPassword()">
+      </div>
+      <div id="fg-msg" style="font-size:12px;min-height:18px;margin-bottom:8px;text-align:center;font-weight:600;padding:4px 0"></div>
+      <button id="fg-btn" class="lf-sub-btn" onclick="doForgotPassword()">Enviar link de recuperação</button>
+      <p style="margin-top:12px;text-align:center">
+        <a href="#" class="lf-back-link" onclick="event.preventDefault();showLoginStep()">← Voltar ao login</a>
+      </p>
     </div>
 
     <!-- ─ CADASTRO: Criar conta ─ -->
@@ -2921,18 +2942,6 @@ async function applySession(token, isCheckoutReturn = false) {
   rl.className = `role-${profile.role}`;
   if (profile.role === 'admin') {
     document.getElementById('btn-admin').style.display = 'flex';
-    // Link para painel completo de usuários
-    const ub = document.getElementById('user-bar');
-    if (!document.getElementById('btn-admin-full')) {
-      const lnk = document.createElement('a');
-      lnk.id = 'btn-admin-full';
-      lnk.href = 'admin-users.html';
-      lnk.title = 'Painel de assinantes';
-      lnk.className = 'ub-btn';
-      lnk.style.cssText = 'text-decoration:none;display:flex;align-items:center;justify-content:center;font-size:13px';
-      lnk.textContent = '👥';
-      ub.insertBefore(lnk, document.getElementById('btn-admin'));
-    }
   }
   applyRoleRestrictions(profile.role);
 
@@ -3004,9 +3013,15 @@ async function doLogin() {
       scheduleTokenRefresh(data.access_token);
       await applySession(data.access_token);
     } else {
-      const msg = data?.error_description || data?.msg || '';
-      errEl.textContent = msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('credential')
-        ? 'E-mail ou senha incorretos.' : 'Erro ao entrar. Tente novamente.';
+      const msg = (data?.error_description || data?.msg || '').toLowerCase();
+      if (msg.includes('not confirmed'))
+        errEl.textContent = 'E-mail ainda não confirmado. Verifique sua caixa de entrada.';
+      else if (msg.includes('invalid') || msg.includes('credential'))
+        errEl.textContent = 'E-mail ou senha incorretos.';
+      else if (msg.includes('rate') || msg.includes('too many'))
+        errEl.textContent = 'Muitas tentativas. Aguarde um minuto.';
+      else
+        errEl.textContent = 'Erro ao entrar. Tente novamente.';
     }
   } catch(e) { errEl.textContent='Erro de conexão. Tente novamente.'; }
   finally { btn.disabled=false; btn.textContent='Entrar no sistema'; }
@@ -3018,25 +3033,60 @@ async function doLogout() {
   clearSession(); location.reload();
 }
 
-// ── Planos / Checkout ──────────────────────────
-function showLoginStep() {
-  ['step-login','step-register','step-pricing','step-reset'].forEach(id => {
+// ── Navegação entre passos do overlay de login ──
+const _LOGIN_STEPS = ['step-login','step-forgot','step-register','step-pricing','step-reset'];
+function _showStep(stepId) {
+  _LOGIN_STEPS.forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.style.display = id === 'step-login' ? 'block' : 'none';
+    if (el) el.style.display = id === stepId ? 'block' : 'none';
   });
 }
-function showRegisterStep() {
-  ['step-login','step-register','step-pricing','step-reset'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = id === 'step-register' ? 'block' : 'none';
-  });
+function showLoginStep()    { _showStep('step-login');    setTimeout(()=>document.getElementById('li-user')?.focus(),100); }
+function showRegisterStep() { _showStep('step-register'); setTimeout(()=>document.getElementById('reg-nome')?.focus(),100); }
+function showPricingStep()  { _showStep('step-pricing');  document.getElementById('pricing-err').textContent=''; }
+function showForgotStep()   {
+  _showStep('step-forgot');
+  const fg = document.getElementById('fg-email');
+  // Pré-preenche com o que o usuário já digitou no login
+  const li = document.getElementById('li-user');
+  if (fg && li?.value && !fg.value) fg.value = li.value.trim();
+  document.getElementById('fg-msg').textContent = '';
+  setTimeout(()=>fg?.focus(),100);
 }
-function showPricingStep() {
-  ['step-login','step-register','step-pricing','step-reset'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = id === 'step-pricing' ? 'block' : 'none';
-  });
-  document.getElementById('pricing-err').textContent='';
+
+// ── Recuperação de senha (envia e-mail com link) ──
+async function doForgotPassword() {
+  const email = (document.getElementById('fg-email').value||'').trim().toLowerCase();
+  const msgEl = document.getElementById('fg-msg');
+  const btn   = document.getElementById('fg-btn');
+  msgEl.style.color = '#e74c3c';
+  msgEl.textContent = '';
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    msgEl.textContent = 'Digite um e-mail válido.'; return;
+  }
+  if (btn._sending) return; // anti duplo-clique
+  btn._sending = true; btn.disabled = true; btn.textContent = 'Enviando...';
+  try {
+    const redirectTo = encodeURIComponent(window.location.origin + window.location.pathname);
+    const resp = await fetch(`${SUPABASE_URL}/auth/v1/recover?redirect_to=${redirectTo}`, {
+      method: 'POST', headers: sbH(),
+      body: JSON.stringify({ email })
+    });
+    if (resp.ok) {
+      msgEl.style.color = 'var(--green)';
+      msgEl.textContent = '✅ Link enviado! Verifique seu e-mail (e a caixa de spam).';
+      btn.textContent = 'Link enviado ✓';
+      // Mantém botão travado 30s para evitar spam de e-mails
+      setTimeout(() => { btn._sending=false; btn.disabled=false; btn.textContent='Enviar link de recuperação'; }, 30000);
+      return;
+    }
+    const data = await resp.json().catch(()=>({}));
+    if (resp.status === 429) msgEl.textContent = 'Muitas tentativas. Aguarde alguns minutos.';
+    else msgEl.textContent = data.msg || data.error_description || 'Erro ao enviar. Tente novamente.';
+  } catch {
+    msgEl.textContent = 'Erro de conexão. Verifique sua internet.';
+  }
+  btn._sending = false; btn.disabled = false; btn.textContent = 'Enviar link de recuperação';
 }
 function showLoginOverlayWithRegister() {
   document.getElementById('sub-required-overlay').classList.remove('show');
@@ -3584,21 +3634,45 @@ async function negarVitalicio(userId) {
   carregarVitalicioPendente();
 }
 
+// ── Status do usuário → badge legível ──────────
+function _userStatusBadge(u) {
+  if (u.stripe_customer_id)  return { txt:'💳 Assinante',  color:'#27ae60' };
+  if (u.status === 'active') return { txt:'✅ Ativo',       color:'#27ae60' };
+  if (u.status === 'trial') {
+    const exp = u.trial_expires_at ? new Date(u.trial_expires_at) : null;
+    if (exp && exp > new Date()) {
+      const dias = Math.ceil((exp - Date.now()) / 86400000);
+      return { txt:`🎁 Trial · ${dias}d`, color:'#f39c12' };
+    }
+    return { txt:'⏰ Trial expirado', color:'#e74c3c' };
+  }
+  return { txt:'○ Pendente', color:'var(--sub)' };
+}
+
 async function renderAdminUsers() {
   const el = document.getElementById('admin-user-list');
   el.innerHTML='<div style="font-size:11px;color:var(--sub);padding:8px 0">Carregando...</div>';
   const sess = getSession();
-  const profiles = await sbGet('/rest/v1/profiles?select=id,name,role,stripe_customer_id&order=created_at.desc', sess?.access_token);
+  const profiles = await sbGet('/rest/v1/profiles?select=id,name,email,phone,role,status,trial_expires_at,stripe_customer_id,created_at&order=created_at.desc', sess?.access_token);
   if (!profiles?.length) { el.innerHTML='<div class="empty-state">Nenhum usuário</div>'; return; }
-  el.innerHTML = profiles.map(u => {
-    const nome = (u.name && String(u.name).trim()) || 'Sem nome';
+  el.innerHTML = `<div style="font-size:10px;color:var(--dim);padding:0 0 6px;text-align:right">${profiles.length} usuário${profiles.length>1?'s':''}</div>` +
+  profiles.map(u => {
+    const nome  = (u.name && String(u.name).trim()) || (u.email ? u.email.split('@')[0] : 'Sem nome');
+    const badge = _userStatusBadge(u);
+    const desde = u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '';
     return `<div class="adm-user-card">
       <div class="auc-av" style="background:${ROLE_COLORS[u.role]||'#555'}">${esc(_initials(nome))}</div>
       <div class="auc-info">
         <div class="auc-name">${esc(nome)}</div>
-        <div class="auc-user">${u.stripe_customer_id?'💳 assinante':'○ sem assinatura'}</div>
+        <div class="auc-user" style="word-break:break-all">${esc(u.email||'')}</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:2px;flex-wrap:wrap">
+          <span style="font-size:9px;font-weight:700;color:${badge.color}">${badge.txt}</span>
+          ${u.phone ? `<span style="font-size:9px;color:var(--dim)">📱 ${esc(u.phone)}</span>` : ''}
+          ${desde   ? `<span style="font-size:9px;color:var(--dim)">desde ${desde}</span>` : ''}
+        </div>
       </div>
-      <select class="adm-sel" style="font-size:10px;padding:4px 6px" onchange="changeRole('${esc(u.id)}',this.value)">
+      <select class="adm-sel" style="font-size:10px;padding:4px 6px" data-prev="${esc(u.role)}"
+              onchange="changeRole('${esc(u.id)}', this.value, '${esc(nome).replace(/'/g,'')}', this)">
         <option value="operador"     ${u.role==='operador'?'selected':''}>Operador</option>
         <option value="visualizador" ${u.role==='visualizador'?'selected':''}>Visualizador</option>
         <option value="admin"        ${u.role==='admin'?'selected':''}>Admin</option>
@@ -3606,10 +3680,24 @@ async function renderAdminUsers() {
     </div>`;
   }).join('');
 }
-async function changeRole(userId, newRole) {
+
+async function changeRole(userId, newRole, nome, selEl) {
+  const prev = selEl?.dataset.prev || '';
+  // Confirmação — promover a admin é decisão séria
+  const aviso = newRole === 'admin'
+    ? `⚠ Tornar "${nome}" ADMINISTRADOR?\n\nEle terá acesso total: usuários, moderação e configurações.`
+    : `Alterar o perfil de "${nome}" para ${ROLE_LABELS[newRole]||newRole}?`;
+  if (!confirm(aviso)) { if (selEl) selEl.value = prev; return; }
+
   const sess = getSession();
   const s = await sbPatch(`/rest/v1/profiles?id=eq.${userId}`, {role:newRole}, sess?.access_token);
-  s < 300 ? toast('Perfil atualizado.','ok') : toast('Erro ao alterar perfil.','err');
+  if (s < 300) {
+    if (selEl) selEl.dataset.prev = newRole;
+    toast(`Perfil de ${nome} atualizado para ${ROLE_LABELS[newRole]||newRole}.`,'ok');
+  } else {
+    if (selEl) selEl.value = prev; // reverte visual
+    toast('Erro ao alterar perfil. Verifique sua permissão.','err');
+  }
 }
 async function inviteUser() {
   const name  = document.getElementById('new-name').value.trim();
@@ -3639,6 +3727,11 @@ function toggleSenha() {
 // ── Teclado ────────────────────────────────────
 document.getElementById('li-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
 document.getElementById('li-user').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('li-pass').focus(); });
+// Autofocus no e-mail ao abrir (se overlay de login estiver visível)
+setTimeout(() => {
+  const ov = document.getElementById('login-overlay');
+  if (ov && !ov.classList.contains('gone')) document.getElementById('li-user')?.focus();
+}, 400);
 
 initAuth();
 verificarLinkCompartilhado();
