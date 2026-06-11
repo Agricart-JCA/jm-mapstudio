@@ -1614,6 +1614,13 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       <div id="fund-mode-hint" style="margin-top:6px;padding:6px 10px;border-radius:7px;font-size:10px;text-align:center;background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.2);color:var(--red)">
         Clique em um município no mapa ou pesquise abaixo
       </div>
+      <!-- Botão GPS — consulta CAR/SIGEF na localização atual (diferencial de campo) -->
+      <button id="fund-gps-btn" onclick="fundConsultarGPS()" style="display:none;width:100%;margin-top:7px;padding:11px;border:none;border-radius:9px;font-size:12px;font-weight:800;cursor:pointer;font-family:var(--font);color:#fff;background:linear-gradient(135deg,#27ae60,#1e8449);box-shadow:0 3px 12px rgba(39,174,96,.35);display:none;align-items:center;justify-content:center;gap:8px">
+        <span style="font-size:16px">📍</span> Consultar onde estou agora
+      </button>
+      <div id="fund-gps-sub" style="display:none;margin-top:4px;font-size:9px;text-align:center;color:var(--dim)">
+        Use no campo: fique sobre o imóvel e toque para consultar
+      </div>
     </div>
 
     <!-- Busca -->
@@ -4522,8 +4529,8 @@ function fundSetMode(mode) {
   if (hint) {
     const hints = {
       municipios: { txt:'Clique em um município no mapa ou pesquise abaixo', bg:'rgba(192,57,43,.08)', border:'rgba(192,57,43,.2)', color:'var(--red)' },
-      car:        { txt:'🌱 Clique em qualquer ponto do mapa → consulta SICAR', bg:'rgba(39,174,96,.1)', border:'rgba(39,174,96,.3)', color:'#27ae60' },
-      sigef:      { txt:'🏛 Digite o código SIGEF ou clique no mapa', bg:'rgba(41,128,185,.1)', border:'rgba(41,128,185,.3)', color:'#2980b9' },
+      car:        { txt:'🌱 Imóveis do CAR no mapa — toque num polígono ou no botão GPS', bg:'rgba(39,174,96,.1)', border:'rgba(39,174,96,.3)', color:'#27ae60' },
+      sigef:      { txt:'🏛 Toque no mapa ou no GPS — consulta oficial no INCRA', bg:'rgba(41,128,185,.1)', border:'rgba(41,128,185,.3)', color:'#2980b9' },
     };
     const h = hints[mode];
     hint.textContent    = h.txt;
@@ -4561,8 +4568,67 @@ function fundSetMode(mode) {
   show('fund-sigef-panel', false); // idem
   show('fund-sigef-search', mode === 'sigef');
 
+  // Botão GPS — só aparece em CAR/SIGEF (o diferencial de campo)
+  const gpsBtn = document.getElementById('fund-gps-btn');
+  const gpsSub = document.getElementById('fund-gps-sub');
+  const gpsOn  = (mode === 'car' || mode === 'sigef');
+  if (gpsBtn) {
+    gpsBtn.style.display = gpsOn ? 'flex' : 'none';
+    const grad = mode === 'car'
+      ? 'linear-gradient(135deg,#27ae60,#1e8449)'
+      : 'linear-gradient(135deg,#2980b9,#1f618d)';
+    gpsBtn.style.background = grad;
+    gpsBtn.style.boxShadow  = mode === 'car'
+      ? '0 3px 12px rgba(39,174,96,.35)'
+      : '0 3px 12px rgba(41,128,185,.35)';
+  }
+  if (gpsSub) gpsSub.style.display = gpsOn ? 'block' : 'none';
+
   if (mode === 'car')   { toast('🌱 CAR ativo — imóveis SICAR visíveis no mapa', 'ok'); _carSetupWms(); }
-  if (mode === 'sigef') toast('🏛 SIGEF ativo — use a busca por código ou clique no mapa', 'ok');
+  if (mode === 'sigef') toast('🏛 SIGEF ativo — clique no mapa ou use o GPS', 'ok');
+}
+
+// ── Consulta CAR/SIGEF pela localização GPS do dispositivo ──────
+let _fundGpsMarker = null;
+function fundConsultarGPS() {
+  if (_fundMode === 'municipios') return;
+  if (!navigator.geolocation) { toast('GPS não suportado neste dispositivo', 'warn'); return; }
+  const btn = document.getElementById('fund-gps-btn');
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.style.opacity = '.7'; btn.innerHTML = '<span style="font-size:16px">📡</span> Localizando você…'; }
+  toast('📡 Obtendo sua localização…');
+  navigator.geolocation.getCurrentPosition(
+    async pos => {
+      const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+      map.setView([lat, lon], 16);
+
+      // Marcador "você está aqui"
+      if (_fundGpsMarker) { try { map.removeLayer(_fundGpsMarker); } catch(e){} }
+      _fundGpsMarker = L.marker([lat, lon], {
+        icon: L.divIcon({ className:'',
+          html:'<div style="width:18px;height:18px;border-radius:50%;background:#f39c12;border:3px solid #fff;box-shadow:0 2px 10px rgba(243,156,18,.8)"></div>',
+          iconSize:[18,18], iconAnchor:[9,9] })
+      }).addTo(map).bindPopup(`<b>📍 Você está aqui</b><br><small>Precisão ±${Math.round(accuracy)} m</small>`).openPopup();
+
+      if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = orig; }
+
+      // Dispara a consulta do modo ativo no ponto do GPS
+      if (_fundMode === 'car') {
+        _carSetupWms();
+        await consultarCAR(lat, lon);
+        toast('🌱 Consultando imóvel CAR na sua posição', 'ok');
+      } else if (_fundMode === 'sigef') {
+        await consultarSIGEFPorPonto(lat, lon);
+        toast('🏛 Consultando SIGEF na sua posição', 'ok');
+      }
+    },
+    err => {
+      if (btn) { btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = orig; }
+      const msgs = { 1:'Permissão de GPS negada — autorize a localização no navegador', 2:'GPS indisponível no momento', 3:'Tempo esgotado ao obter localização' };
+      toast(msgs[err.code] || 'Erro ao obter localização', 'warn', 5000);
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+  );
 }
 
 function _selecionarMunicipio(feature, layer) {
@@ -4686,21 +4752,22 @@ let _carWmsUf    = '';     // UF atual do WMS
 let _carFeats    = [];
 let _sigefLayer   = null;
 let _sigefGeojson = null;  // cache do GeoJSON SIGEF (upload manual)
-let _sigefWmsLayer = null; // camada WMS visual INCRA/SIGEF
-let _sigefWmsOk   = false; // WMS respondeu ao menos uma vez
-const SIGEF_WMS_URL   = 'https://geoserver.incra.gov.br/geoserver/ows';
-const SIGEF_WMS_LAYER = 'SNCR:sigef_area_certificada';
+let _sigefWmsLayer = null; // reservado: camada WMS SIGEF (INCRA nacional indisponível no momento)
+let _sigefWmsOk   = false;
+// O geoserver nacional do INCRA está fora do ar. SIGEF opera por consulta de ponto
+// (GPS/clique) + portal oficial + GeoJSON próprio se o usuário subir um. Quando o INCRA
+// voltar com um WMS estável, basta preencher SIGEF_WMS_URL/LAYER e reativar _sigefAddWms.
+const SIGEF_WMS_URL   = '';
+const SIGEF_WMS_LAYER = '';
 
 function _sigefAddWms() {
-  if (_sigefWmsLayer) return; // já ativa
+  // INCRA nacional indisponível — não adiciona tiles quebrados (evita erro no console).
+  if (!SIGEF_WMS_URL) return;
+  if (_sigefWmsLayer) return;
   try {
     _sigefWmsLayer = L.tileLayer.wms(SIGEF_WMS_URL, {
-      layers: SIGEF_WMS_LAYER,
-      format: 'image/png',
-      transparent: true,
-      version: '1.3.0',
-      opacity: 0.65,
-      attribution: 'INCRA/SIGEF'
+      layers: SIGEF_WMS_LAYER, format:'image/png', transparent:true,
+      version:'1.3.0', opacity:0.65, attribution:'INCRA/SIGEF'
     });
     _sigefWmsLayer.once('load', () => { _sigefWmsOk = true; });
     _sigefWmsLayer.on('tileerror', () => { _sigefWmsOk = false; });
@@ -4718,22 +4785,26 @@ function _sigefRemoveWms() {
 // ── CAR WMS tiles — exibe polígonos sem CORS, sem limite de features ──
 function _carSetupWms() {
   if (_fundMode !== 'car') return;
-  const uf = _latLonToUF(map.getCenter().lat, map.getCenter().lng).toLowerCase();
-  // Mesmo estado? Só reconstrói se mudou ou não existe
-  if (_carWmsLayer && _carWmsUf === uf) return;
+  const ufs = _ufsInBounds(map.getBounds());          // todos os estados visíveis
+  const chave = ufs.slice().sort().join(',');
+  if (_carWmsLayer && _carWmsUf === chave) return;     // nada mudou
   if (_carWmsLayer) { try { map.removeLayer(_carWmsLayer); } catch(e) {} _carWmsLayer = null; }
-  _carWmsUf = uf;
+  _carWmsUf = chave;
+  const layers = ufs.map(u => `sicar:sicar_imoveis_${u.toLowerCase()}`).join(',');
+  const rotulo = ufs.join('/');
+  const hint = document.getElementById('fund-mode-hint');
+  if (hint) hint.textContent = `🌱 Carregando imóveis CAR (${rotulo})…`;
   try {
     _carWmsLayer = L.tileLayer.wms(SICAR_WFS, {
-      layers: `sicar:sicar_imoveis_${uf}`,
-      format: 'image/png',
-      transparent: true,
-      version: '1.1.1',
-      opacity: 0.85
+      layers, format:'image/png', transparent:true, version:'1.1.1', opacity:0.85
+    });
+    _carWmsLayer.on('load', () => {
+      if (_fundMode === 'car' && hint) hint.textContent = `🌱 Imóveis CAR no mapa (${rotulo}) — toque num polígono ou use o GPS`;
+    });
+    _carWmsLayer.on('tileerror', () => {
+      if (_fundMode === 'car' && hint) hint.textContent = `⚠ SICAR instável agora — tente o botão GPS ou clique no mapa`;
     });
     _carWmsLayer.addTo(map);
-    const hint = document.getElementById('fund-mode-hint');
-    if (hint) hint.textContent = `🌱 CAR/${uf.toUpperCase()} carregando… clique em um imóvel para detalhes`;
   } catch(e) { console.warn('[SICAR WMS]', e); }
 }
 
@@ -4743,28 +4814,63 @@ function _carRemoveWms() {
   _carWmsLayer = null; _carWmsUf = '';
 }
 
-// ── Detecta UF pelo lat/lon ────────────────────
+// ── Bounding boxes dos 27 estados: [minLat, minLon, maxLat, maxLon] ──
+const _UF_BBOX = [
+  ['AC',[-11.15,-73.99,-7.12,-66.62]],['AL',[-10.50,-38.23,-8.81,-35.15]],
+  ['AM',[-9.83,-73.80, 2.25,-56.09]],['AP',[-1.25,-51.93, 4.44,-49.87]],
+  ['BA',[-18.36,-46.63,-8.53,-37.34]],['CE',[-7.85,-41.41,-2.77,-37.25]],
+  ['DF',[-16.06,-48.28,-15.50,-47.30]],['ES',[-21.30,-41.88,-17.87,-39.68]],
+  ['GO',[-19.49,-53.25,-12.39,-45.93]],['MA',[-10.26,-48.80,-1.03,-41.82]],
+  ['MG',[-22.93,-51.04,-14.23,-39.86]],['MS',[-24.07,-58.16,-17.15,-50.93]],
+  ['MT',[-18.05,-61.00,-7.34,-50.23]],['PA',[-9.85,-58.90, 2.59,-46.01]],
+  ['PB',[-8.29,-38.82,-6.02,-34.79]],['PE',[-9.48,-41.38,-7.15,-34.86]],
+  ['PI',[-11.81,-45.99,-2.73,-40.37]],['PR',[-26.73,-54.62,-22.51,-48.02]],
+  ['RJ',[-23.38,-44.89,-20.76,-40.95]],['RN',[-6.99,-38.59,-4.82,-35.15]],
+  ['RO',[-13.70,-66.80,-7.96,-59.78]],['RR',[-5.28,-64.41, 5.27,-58.91]],
+  ['RS',[-33.75,-53.68,-27.07,-49.69]],['SC',[-29.37,-53.84,-25.95,-48.36]],
+  ['SE',[-11.57,-38.24,-9.52,-36.40]],['SP',[-25.31,-53.11,-19.78,-44.16]],
+  ['TO',[-13.46,-50.74,-5.16,-45.74]],
+];
+
+// Detecta UF de um ponto. Bboxes se sobrepõem (ex.: Rio cai dentro de MG e RJ),
+// então escolhe o estado cujo CENTRO é mais próximo do ponto — robusto.
 function _latLonToUF(lat, lon) {
-  const uf = [
-    ['AC',[-11.15,-73.99,-7.12,-66.62]],['AL',[-10.50,-38.23,-8.81,-35.15]],
-    ['AM',[-9.83,-73.80, 2.25,-56.09]],['AP',[-1.25,-51.93, 4.44,-49.87]],
-    ['BA',[-18.36,-46.63,-8.53,-37.34]],['CE',[-7.85,-41.41,-2.77,-37.25]],
-    ['DF',[-16.06,-48.28,-15.50,-47.30]],['ES',[-21.30,-41.88,-17.87,-39.68]],
-    ['GO',[-19.49,-53.25,-12.39,-45.93]],['MA',[-10.26,-48.80,-1.03,-41.82]],
-    ['MG',[-22.93,-51.04,-14.23,-39.86]],['MS',[-24.07,-58.16,-17.15,-50.93]],
-    ['MT',[-18.05,-61.00,-7.34,-50.23]],['PA',[-9.85,-58.90, 2.59,-46.01]],
-    ['PB',[-8.29,-38.82,-6.02,-34.79]],['PE',[-9.48,-41.38,-7.15,-34.86]],
-    ['PI',[-11.81,-45.99,-2.73,-40.37]],['PR',[-26.73,-54.62,-22.51,-48.02]],
-    ['RJ',[-23.38,-44.89,-20.76,-40.95]],['RN',[-6.99,-38.59,-4.82,-35.15]],
-    ['RO',[-13.70,-66.80,-7.96,-59.78]],['RR',[-5.28,-64.41, 5.27,-58.91]],
-    ['RS',[-33.75,-53.68,-27.07,-49.69]],['SC',[-29.37,-53.84,-25.95,-48.36]],
-    ['SE',[-11.57,-38.24,-9.52,-36.40]],['SP',[-25.31,-53.11,-19.78,-44.16]],
-    ['TO',[-13.46,-50.74,-5.16,-45.74]],
-  ];
-  for (const [s,[minLat,minLon,maxLat,maxLon]] of uf) {
-    if (lat>=minLat && lat<=maxLat && lon>=minLon && lon<=maxLon) return s;
+  let melhor = 'RJ', menorDist = Infinity, achouContido = false;
+  for (const [s,[minLat,minLon,maxLat,maxLon]] of _UF_BBOX) {
+    const contido = lat>=minLat && lat<=maxLat && lon>=minLon && lon<=maxLon;
+    if (achouContido && !contido) continue; // já temos candidatos contidos; ignora não-contidos
+    const cLat = (minLat+maxLat)/2, cLon = (minLon+maxLon)/2;
+    const d = (lat-cLat)*(lat-cLat) + (lon-cLon)*(lon-cLon);
+    if (contido && !achouContido) { achouContido = true; menorDist = d; melhor = s; continue; }
+    if (d < menorDist) { menorDist = d; melhor = s; }
   }
-  return 'RJ'; // fallback
+  return melhor;
+}
+
+// Todos os estados cujo bbox cruza os limites visíveis do mapa (para WMS multi-camada).
+function _ufsInBounds(b) {
+  const south=b.getSouth(), west=b.getWest(), north=b.getNorth(), east=b.getEast();
+  const out = [];
+  for (const [s,[minLat,minLon,maxLat,maxLon]] of _UF_BBOX) {
+    const fora = minLat>north || maxLat<south || minLon>east || maxLon<west;
+    if (!fora) out.push(s);
+  }
+  // Limita a 6 estados para não sobrecarregar o WMS; prioriza o central
+  if (out.length > 6) {
+    const c = b.getCenter();
+    out.sort((a,z) => {
+      const da = _ufCenterDist(a, c.lat, c.lng), dz = _ufCenterDist(z, c.lat, c.lng);
+      return da - dz;
+    });
+    return out.slice(0,6);
+  }
+  return out.length ? out : [_latLonToUF(b.getCenter().lat, b.getCenter().lng)];
+}
+function _ufCenterDist(uf, lat, lon) {
+  const e = _UF_BBOX.find(x => x[0]===uf); if (!e) return Infinity;
+  const [minLat,minLon,maxLat,maxLon] = e[1];
+  const cLat=(minLat+maxLat)/2, cLon=(minLon+maxLon)/2;
+  return (lat-cLat)*(lat-cLat)+(lon-cLon)*(lon-cLon);
 }
 
 function _carStatusLabel(condicao, statusImovel) {
@@ -4786,67 +4892,6 @@ map.on('moveend', () => {
   clearTimeout(_carMoveTimer);
   _carMoveTimer = setTimeout(_carSetupWms, 900); // atualiza WMS se mudou de estado
 });
-
-// ── CAR: carrega todos os polígonos da área visível ──
-async function consultarCARViewport() {
-  if (_fundMode !== 'car') return;
-  if (_carVpPending) return;
-  const zoom = map.getZoom();
-  const hint = document.getElementById('fund-mode-hint');
-  if (zoom < 9) {
-    if (hint) hint.textContent = '🌱 CAR ativo — dê zoom in para ver os imóveis';
-    return;
-  }
-  _carVpPending = true;
-  if (hint) hint.textContent = '🔄 Consultando SICAR…';
-  if (_carLayer) { map.removeLayer(_carLayer); _carLayer = null; }
-  _carFeats = [];
-  try {
-    const b  = map.getBounds();
-    const uf = _latLonToUF(map.getCenter().lat, map.getCenter().lng);
-    const bbox = `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()},EPSG:4326`;
-    const params = new URLSearchParams({
-      service:'WFS', version:'2.0.0', request:'GetFeature',
-      typeName:`sicar:sicar_imoveis_${uf.toLowerCase()}`,
-      outputFormat:'application/json', count:'400', bbox
-    });
-    const res = await fetch(`${SICAR_WFS}?${params}`, { signal: AbortSignal.timeout(22000) });
-    if (!res.ok) throw new Error(`SICAR/${uf} HTTP ${res.status}`);
-    const data = await res.json();
-    if (_fundMode !== 'car') return; // saiu do modo durante o carregamento
-    _carFeats = data.features || [];
-    if (!_carFeats.length) {
-      if (hint) hint.textContent = '🌱 Sem imóveis CAR nesta área — navegue ou zoom in';
-      return;
-    }
-    _carLayer = L.geoJSON(data, {
-      style: f => {
-        const p = f.properties||{};
-        const st = _carStatusLabel(p.condicao, p.status_imovel);
-        const col = st.color === '#27ae60' ? '#27ae60'
-                  : st.color === '#e74c3c' ? '#e74c3c' : '#f39c12';
-        return { color:col, weight:1.5, fillColor:col, fillOpacity:0.16 };
-      },
-      onEachFeature: (feat, layer) => {
-        const p = feat.properties||{};
-        const cod  = p.cod_imovel||'—';
-        const area = parseFloat(p.area||0).toFixed(2);
-        layer.bindPopup(`<b>🌱 ${cod}</b><br><small>${area} ha · ${p.municipio||''}</small><br><span style="font-size:10px;color:#27ae60;font-weight:700">← clique para detalhes</span>`);
-        layer.on('click', e => {
-          L.DomEvent.stopPropagation(e);
-          const idx = _carFeats.indexOf(feat);
-          _carMostrarNoSidebar(idx >= 0 ? idx : 0, feat);
-        });
-      }
-    }).addTo(map);
-    if (hint) hint.textContent = `🌱 ${_carFeats.length} imóveis CAR/${uf} — clique em um para detalhes`;
-  } catch(err) {
-    if (hint) hint.textContent = `⚠ ${err.message.substring(0,50)}`;
-    console.error('[CAR viewport]', err);
-  } finally {
-    _carVpPending = false;
-  }
-}
 
 // ── CAR: mostra detalhes de 1 imóvel no sidebar ──
 function _carMostrarNoSidebar(idx, feat) {
@@ -4961,7 +5006,7 @@ async function consultarCAR(lat, lon) {
 
     if (!_carFeats.length) { empty.style.display = 'block'; return; }
 
-    count.textContent = _carFeats.length + ' imóvel' + (_carFeats.length>1?'is':'');
+    count.textContent = _carFeats.length + (_carFeats.length>1 ? ' imóveis' : ' imóvel');
 
     _carLayer = L.geoJSON(data, {
       // Destaque sobre o WMS: borda forte + preenchimento semi-transparente
