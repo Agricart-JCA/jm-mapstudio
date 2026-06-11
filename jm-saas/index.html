@@ -4561,12 +4561,14 @@ function fundSetMode(mode) {
     if (mode === 'municipios') {
       if (_carLayer)   { map.removeLayer(_carLayer);   _carLayer   = null; }
       if (_sigefLayer) { map.removeLayer(_sigefLayer); _sigefLayer = null; }
+      if (_sigefMarker){ map.removeLayer(_sigefMarker);_sigefMarker= null; }
       _carRemoveWms();
       _sigefRemoveWms();
       if (_fundLayer)  { if (!map.hasLayer(_fundLayer)) map.addLayer(_fundLayer); }
     } else if (mode === 'car') {
       if (_fundLayer && map.hasLayer(_fundLayer)) map.removeLayer(_fundLayer);
       if (_sigefLayer) { map.removeLayer(_sigefLayer); _sigefLayer = null; }
+      if (_sigefMarker){ map.removeLayer(_sigefMarker);_sigefMarker= null; }
       _sigefRemoveWms();
       // _carWmsLayer gerenciado por _carSetupWms()
     } else if (mode === 'sigef') {
@@ -4774,8 +4776,12 @@ let _carWmsUf    = '';     // UF atual do WMS
 let _carFeats    = [];
 let _sigefLayer   = null;
 let _sigefGeojson = null;  // cache do GeoJSON SIGEF (upload manual)
+let _sigefMarker  = null;  // marcador do ponto consultado
 let _sigefWmsLayer = null; // reservado: camada WMS SIGEF (INCRA nacional indisponível no momento)
 let _sigefWmsOk   = false;
+// Portais oficiais do INCRA que respondem (validados):
+const SIGEF_PORTAL  = 'https://sigef.incra.gov.br';
+const INCRA_ACERVO  = 'https://acervofundiario.incra.gov.br/acervo/acv.php'; // mapa público de parcelas
 // O geoserver nacional do INCRA está fora do ar. SIGEF opera por consulta de ponto
 // (GPS/clique) + portal oficial + GeoJSON próprio se o usuário subir um. Quando o INCRA
 // voltar com um WMS estável, basta preencher SIGEF_WMS_URL/LAYER e reativar _sigefAddWms.
@@ -4869,45 +4875,44 @@ const _UF_BBOX = [
   ['TO',[-13.46,-50.74,-5.16,-45.74]],
 ];
 
-// Detecta UF de um ponto. Bboxes se sobrepõem (ex.: Rio cai dentro de MG e RJ),
-// então escolhe o estado cujo CENTRO é mais próximo do ponto — robusto.
+// Detecta UF de um ponto. Bboxes se sobrepõem (ex.: Manaus cai em AM e RR;
+// Rio cai em RJ e MG). Escolhe o estado onde o ponto é MAIS INTERIOR (maior
+// distância até a borda mais próxima do bbox) — mais confiável que centroide.
 function _latLonToUF(lat, lon) {
-  let melhor = 'RJ', menorDist = Infinity, achouContido = false;
-  for (const [s,[minLat,minLon,maxLat,maxLon]] of _UF_BBOX) {
-    const contido = lat>=minLat && lat<=maxLat && lon>=minLon && lon<=maxLon;
-    if (achouContido && !contido) continue; // já temos candidatos contidos; ignora não-contidos
-    const cLat = (minLat+maxLat)/2, cLon = (minLon+maxLon)/2;
-    const d = (lat-cLat)*(lat-cLat) + (lon-cLon)*(lon-cLon);
-    if (contido && !achouContido) { achouContido = true; menorDist = d; melhor = s; continue; }
-    if (d < menorDist) { menorDist = d; melhor = s; }
-  }
-  return melhor;
+  const cands = _ufCandidates(lat, lon);
+  return cands[0] || 'RJ';
 }
 
-// Todos os estados cujo bbox cruza os limites visíveis do mapa (para WMS multi-camada).
-function _ufsInBounds(b) {
-  const south=b.getSouth(), west=b.getWest(), north=b.getNorth(), east=b.getEast();
-  const out = [];
-  for (const [s,[minLat,minLon,maxLat,maxLon]] of _UF_BBOX) {
-    const fora = minLat>north || maxLat<south || minLon>east || maxLon<west;
-    if (!fora) out.push(s);
-  }
-  // Limita a 6 estados para não sobrecarregar o WMS; prioriza o central
-  if (out.length > 6) {
-    const c = b.getCenter();
-    out.sort((a,z) => {
-      const da = _ufCenterDist(a, c.lat, c.lng), dz = _ufCenterDist(z, c.lat, c.lng);
-      return da - dz;
-    });
-    return out.slice(0,6);
-  }
-  return out.length ? out : [_latLonToUF(b.getCenter().lat, b.getCenter().lng)];
+// bbox A está totalmente dentro de bbox B? (detecta enclaves, ex.: DF dentro de GO)
+function _bboxDentro(a, b) {
+  return a[0]>=b[0] && a[2]<=b[2] && a[1]>=b[1] && a[3]<=b[3];
 }
-function _ufCenterDist(uf, lat, lon) {
-  const e = _UF_BBOX.find(x => x[0]===uf); if (!e) return Infinity;
-  const [minLat,minLon,maxLat,maxLon] = e[1];
-  const cLat=(minLat+maxLat)/2, cLon=(minLon+maxLon)/2;
-  return (lat-cLat)*(lat-cLat)+(lon-cLon)*(lon-cLon);
+// Lista de UFs candidatas para um ponto, ordenadas da mais provável p/ menos.
+// Usado também na consulta CAR por ponto (testa cada uma até achar o imóvel).
+function _ufCandidates(lat, lon) {
+  const contidos = [], fora = [];
+  for (const [s,box] of _UF_BBOX) {
+    const [minLat,minLon,maxLat,maxLon] = box;
+    if (lat>=minLat && lat<=maxLat && lon>=minLon && lon<=maxLon) {
+      const interior = Math.min(lat-minLat, maxLat-lat, lon-minLon, maxLon-lon);
+      contidos.push([s, interior, box]);
+    } else {
+      const cLat=(minLat+maxLat)/2, cLon=(minLon+maxLon)/2;
+      fora.push([s, -((lat-cLat)*(lat-cLat)+(lon-cLon)*(lon-cLon))]);
+    }
+  }
+  if (contidos.length) {
+    // Enclave: se o bbox de um candidato está dentro de outro, ele vem primeiro (ex.: DF ⊂ GO)
+    contidos.sort((a,b) => {
+      const aEncl = contidos.some(o => o!==a && _bboxDentro(a[2], o[2]));
+      const bEncl = contidos.some(o => o!==b && _bboxDentro(b[2], o[2]));
+      if (aEncl !== bEncl) return aEncl ? -1 : 1;
+      return b[1]-a[1]; // senão, mais interior primeiro
+    });
+    return contidos.map(x => x[0]);
+  }
+  fora.sort((a,b) => b[1]-a[1]);
+  return fora.slice(0,3).map(x => x[0]);
 }
 
 function _carStatusLabel(condicao, statusImovel) {
@@ -5013,7 +5018,8 @@ async function consultarCAR(lat, lon) {
   const ufEl    = document.getElementById('fund-car-uf');
   const hint    = document.getElementById('fund-car-hint');
 
-  const uf = _latLonToUF(lat, lon);
+  const candidatos = _ufCandidates(lat, lon); // testa divisas/Amazônia
+  let uf = candidatos[0];
   panel.style.display   = 'block';
   loading.style.display = 'block';
   list.innerHTML        = '';
@@ -5029,15 +5035,19 @@ async function consultarCAR(lat, lon) {
   try {
     const d    = 0.006; // ~660m — cobre imóveis médios/grandes
     const bbox = `${lon-d},${lat-d},${lon+d},${lat+d},EPSG:4326`;
-    const params = new URLSearchParams({
-      service:'WFS', version:'2.0.0', request:'GetFeature',
-      typeName:`sicar:sicar_imoveis_${uf.toLowerCase()}`,
-      outputFormat:'application/json', count:'20', bbox
-    });
-
-    const res = await fetch(`${SICAR_WFS}?${params}`, { signal: AbortSignal.timeout(18000) });
-    if (!res.ok) throw new Error(`SICAR/${uf} indisponível (${res.status})`);
-    const data  = await res.json();
+    // Tenta cada estado candidato até achar imóvel (cobre pontos em divisa)
+    let data = { features: [] };
+    for (const cand of candidatos.slice(0, 3)) {
+      const params = new URLSearchParams({
+        service:'WFS', version:'2.0.0', request:'GetFeature',
+        typeName:`sicar:sicar_imoveis_${cand.toLowerCase()}`,
+        outputFormat:'application/json', count:'20', bbox
+      });
+      const res = await fetch(`${SICAR_WFS}?${params}`, { signal: AbortSignal.timeout(18000) });
+      if (!res.ok) continue;
+      const j = await res.json();
+      if (j.features?.length) { data = j; uf = cand; if (ufEl) ufEl.textContent = uf; break; }
+    }
     _carFeats   = data.features || [];
     loading.style.display = 'none';
 
@@ -5212,27 +5222,52 @@ async function consultarSIGEFPorPonto(lat, lon) {
     } catch(e) { console.warn('[SIGEF GFI]', e); }
   }
 
-  // ── 3. Fallback: mostra ponto no mapa + link INCRA ──
+  // ── 3. Fallback: marca o ponto + coordenadas copiáveis + portais oficiais ──
   loading.style.display = 'none';
   empty.style.display   = 'block';
   const latFmt = lat.toFixed(6), lonFmt = lon.toFixed(6);
-  const incraUrl = `https://certificacao.incra.gov.br/csv_shp/export.py`;
+
+  // Marcador azul no ponto consultado
+  if (_sigefMarker) { try { map.removeLayer(_sigefMarker); } catch(e){} }
+  _sigefMarker = L.marker([lat, lon], {
+    icon: L.divIcon({ className:'',
+      html:'<div style="width:16px;height:16px;border-radius:50%;background:#2980b9;border:3px solid #fff;box-shadow:0 2px 8px rgba(41,128,185,.7)"></div>',
+      iconSize:[16,16], iconAnchor:[8,8] })
+  }).addTo(map).bindPopup(`<b>🏛 Ponto consultado</b><br><small>${latFmt}, ${lonFmt}</small>`).openPopup();
+
   empty.innerHTML = `
     <div style="text-align:center;padding:4px 0 8px">
       <div style="font-size:22px;margin-bottom:6px">🏛</div>
-      <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">Sem dados SIGEF neste ponto</div>
-      <div style="font-size:10px;color:var(--sub);margin-bottom:10px">Lat ${latFmt} · Lon ${lonFmt}</div>
+      <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">Coordenadas do ponto</div>
+      <div onclick="sigefCopiarCoord(${latFmt},${lonFmt})" title="Clique para copiar"
+        style="cursor:pointer;display:inline-block;font-size:12px;font-weight:700;color:#2980b9;background:rgba(41,128,185,.1);border:1px solid rgba(41,128,185,.3);border-radius:7px;padding:6px 12px;margin-bottom:4px">
+        📋 ${latFmt}, ${lonFmt}
+      </div>
+      <div style="font-size:9px;color:var(--dim);margin-bottom:10px">Toque para copiar · consulte no portal oficial</div>
     </div>
     <div style="display:flex;flex-direction:column;gap:6px">
-      <a href="${incraUrl}" target="_blank"
-        style="display:block;text-align:center;padding:8px;background:rgba(41,128,185,.12);color:#2980b9;border:1px solid rgba(41,128,185,.3);border-radius:8px;font-size:10px;font-weight:700;text-decoration:none">
-        🔗 Portal INCRA — Parcelas Certificadas
+      <a href="${INCRA_ACERVO}" target="_blank" rel="noopener"
+        style="display:block;text-align:center;padding:9px;background:rgba(41,128,185,.12);color:#2980b9;border:1px solid rgba(41,128,185,.3);border-radius:8px;font-size:11px;font-weight:700;text-decoration:none">
+        🗺 Mapa público de parcelas (Acervo INCRA)
       </a>
-      <a href="https://sigef.incra.gov.br" target="_blank"
-        style="display:block;text-align:center;padding:8px;background:rgba(41,128,185,.07);color:#2980b9;border:1px solid rgba(41,128,185,.2);border-radius:8px;font-size:10px;font-weight:600;text-decoration:none">
-        🌐 Portal SIGEF/INCRA
+      <a href="${SIGEF_PORTAL}" target="_blank" rel="noopener"
+        style="display:block;text-align:center;padding:9px;background:rgba(41,128,185,.07);color:#2980b9;border:1px solid rgba(41,128,185,.2);border-radius:8px;font-size:11px;font-weight:600;text-decoration:none">
+        🌐 Portal SIGEF/INCRA (consulta por código)
       </a>
     </div>`;
+}
+
+// Copia coordenadas para a área de transferência
+function sigefCopiarCoord(lat, lon) {
+  const txt = `${lat}, ${lon}`;
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(txt).then(
+      () => toast('📋 Coordenadas copiadas: ' + txt, 'ok'),
+      () => toast('Não foi possível copiar', 'warn')
+    );
+  } else {
+    toast('Coordenadas: ' + txt, 'ok');
+  }
 }
 
 function _sigefRenderCards(feats) {
@@ -5249,10 +5284,10 @@ function _sigefRenderCards(feats) {
     <div style="background:var(--card);border:1px solid rgba(41,128,185,.25);border-radius:10px;padding:11px 12px;font-size:11px">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:10px;font-weight:700;color:var(--text);word-break:break-all;line-height:1.3">🏛 ${cod}</div>
-          <div style="font-size:9px;color:var(--sub);margin-top:2px">${mun}${uf?' · '+uf:''}</div>
+          <div style="font-size:10px;font-weight:700;color:var(--text);word-break:break-all;line-height:1.3">🏛 ${esc(cod)}</div>
+          <div style="font-size:9px;color:var(--sub);margin-top:2px">${esc(mun)}${uf?' · '+esc(uf):''}</div>
         </div>
-        ${sit ? `<span style="font-size:9px;font-weight:700;color:${sitColor};white-space:nowrap">${sit}</span>` : ''}
+        ${sit ? `<span style="font-size:9px;font-weight:700;color:${sitColor};white-space:nowrap">${esc(sit)}</span>` : ''}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px">
         <div style="background:var(--card2);border-radius:6px;padding:5px 7px">
@@ -5261,15 +5296,15 @@ function _sigefRenderCards(feats) {
         </div>
         <div style="background:var(--card2);border-radius:6px;padding:5px 7px">
           <div style="font-size:7px;color:var(--dim);text-transform:uppercase">Código</div>
-          <div style="font-size:9px;font-weight:700;color:var(--text);word-break:break-all">${cod}</div>
+          <div style="font-size:9px;font-weight:700;color:var(--text);word-break:break-all">${esc(cod)}</div>
         </div>
       </div>
       <div style="display:flex;gap:5px">
-        <a href="https://certificacao.incra.gov.br/csv_shp/export.py?tipo=Parcela_Certificada&codigo=${encodeURIComponent(cod)}" target="_blank"
+        <a href="${INCRA_ACERVO}" target="_blank" rel="noopener"
           style="flex:1;text-align:center;padding:6px 0;background:rgba(41,128,185,.1);color:#2980b9;border:1px solid rgba(41,128,185,.25);border-radius:6px;font-size:10px;font-weight:700;text-decoration:none">
-          🔗 SIGEF
+          🗺 Acervo
         </a>
-        <button onclick="_sigefKml('${cod.replace(/'/g,'')}')" style="flex:1;padding:6px 0;background:rgba(26,115,232,.1);color:#1a73e8;border:1px solid rgba(26,115,232,.25);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">⬇ KML</button>
+        <button onclick="_sigefKml('${esc(String(cod).replace(/'/g,''))}')" style="flex:1;padding:6px 0;background:rgba(26,115,232,.1);color:#1a73e8;border:1px solid rgba(26,115,232,.25);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">⬇ KML</button>
       </div>
     </div>`;
   }).join('');
@@ -5280,7 +5315,7 @@ function _sigefKml(cod) {
     const p = f.properties||{};
     return (p.codigo||p.parcela_codigo||p.CODIGO) === cod;
   });
-  if (!f) { window.open(`https://certificacao.incra.gov.br/csv_shp/export.py?tipo=Parcela_Certificada&codigo=${encodeURIComponent(cod)}`,'_blank'); return; }
+  if (!f) { window.open(INCRA_ACERVO, '_blank'); toast('Sem geometria local — abrindo Acervo INCRA', 'warn'); return; }
   const geomKml = _geomToKml(f.geometry);
   if (!geomKml) { toast('Geometria não disponível', 'warn'); return; }
   const kml = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>
@@ -5297,10 +5332,33 @@ function _sigefKml(cod) {
 function sigefBuscarCodigo() {
   const cod = (document.getElementById('fund-sigef-cod')?.value||'').trim();
   if (!cod) { toast('Digite um código SIGEF', 'warn'); return; }
-  // Abre consulta no portal INCRA
-  const url = `https://certificacao.incra.gov.br/csv_shp/export.py?tipo=Parcela_Certificada&codigo=${encodeURIComponent(cod)}`;
-  window.open(url, '_blank');
-  toast('Abrindo consulta SIGEF no portal INCRA…', 'ok');
+
+  // 1) Procura no GeoJSON local (se o usuário subiu os dados) → mostra no mapa
+  const codU = cod.toUpperCase();
+  const f = (_sigefGeojson?.features||[]).find(x => {
+    const p = x.properties||{};
+    return String(p.codigo||p.parcela_codigo||p.CODIGO||'').toUpperCase() === codU;
+  });
+  if (f && f.geometry) {
+    const panel = document.getElementById('fund-sigef-panel');
+    const list  = document.getElementById('fund-sigef-list');
+    const empty = document.getElementById('fund-sigef-empty');
+    const count = document.getElementById('fund-sigef-count');
+    if (panel) panel.style.display = 'block';
+    if (empty) empty.style.display = 'none';
+    if (_sigefLayer) { try { map.removeLayer(_sigefLayer); } catch(e){} }
+    _sigefLayer = L.geoJSON(f, { style:{ color:'#2980b9', weight:2.5, fillColor:'#2980b9', fillOpacity:0.18 } }).addTo(map);
+    try { map.fitBounds(_sigefLayer.getBounds(), { padding:[40,40], maxZoom:16 }); } catch(e){}
+    if (count) count.textContent = '1 parcela';
+    if (list)  list.innerHTML = _sigefRenderCards([f]);
+    toast('🏛 Parcela encontrada nos dados carregados', 'ok');
+    return;
+  }
+
+  // 2) Sem dados locais → copia o código e abre o portal oficial (consulta exige login gov.br)
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(cod).catch(()=>{});
+  window.open(SIGEF_PORTAL, '_blank');
+  toast('Código copiado — cole no portal SIGEF (login gov.br)', 'ok', 5000);
 }
 
 // ── Converte GeoJSON geometry → KML ──────────────────────────
