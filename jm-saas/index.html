@@ -2442,6 +2442,22 @@ function getSession() { try { return JSON.parse(localStorage.getItem(SESS_KEY));
 function setSession(s) { localStorage.setItem(SESS_KEY, JSON.stringify(s)); }
 function clearSession() { localStorage.removeItem(SESS_KEY); }
 
+// ── Segurança: escape de HTML e validação de URL (anti-XSS) ──────
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+function safeUrl(u) {
+  const s = String(u || '').trim();
+  return /^https?:\/\//i.test(s) ? s : '#'; // bloqueia javascript:, data:, etc.
+}
+// Iniciais seguras (evita crash quando o nome é nulo/vazio)
+function _initials(name) {
+  const n = String(name || '').trim();
+  if (!n) return '?';
+  return n.split(/\s+/).map(w => w[0]).slice(0,2).join('').toUpperCase() || '?';
+}
+
 // ── Refresh token automático ────────────────────
 async function refreshToken() {
   const sess = getSession();
@@ -2895,10 +2911,11 @@ async function applySession(token, isCheckoutReturn = false) {
   if (loadEl) loadEl.style.display = 'none';
   document.getElementById('login-overlay').classList.add('gone');
   document.getElementById('sub-required-overlay').classList.remove('show');
-  const initials = profile.name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
-  document.getElementById('user-avatar').textContent = initials;
+  // Nome robusto: se vier nulo do banco, usa o prefixo do e-mail (evita tela branca)
+  const nomeSeguro = (profile.name && String(profile.name).trim()) || user.email?.split('@')[0] || 'Usuário';
+  document.getElementById('user-avatar').textContent = _initials(nomeSeguro);
   document.getElementById('user-avatar').style.background = ROLE_COLORS[profile.role] || 'var(--red)';
-  document.getElementById('user-display-name').textContent = profile.name;
+  document.getElementById('user-display-name').textContent = nomeSeguro;
   const rl = document.getElementById('user-role-lbl');
   rl.textContent = ROLE_LABELS[profile.role] || profile.role;
   rl.className = `role-${profile.role}`;
@@ -3249,17 +3266,17 @@ async function carregarPlantasMunicipio(nomeMunicipio) {
       <div style="background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:10px 12px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
           <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.titulo}</div>
+            <div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.titulo)}</div>
             <div style="font-size:10px;color:var(--sub);margin-top:2px">
-              ${p.tipo || 'Planta'}${p.data_aproximada ? ' · ' + p.data_aproximada : ''}${p.bairro ? ' · ' + p.bairro : ''}
+              ${esc(p.tipo || 'Planta')}${p.data_aproximada ? ' · ' + esc(p.data_aproximada) : ''}${p.bairro ? ' · ' + esc(p.bairro) : ''}
             </div>
           </div>
-          <a href="${p.pdf_url}" target="_blank" rel="noopener"
+          <a href="${safeUrl(p.pdf_url)}" target="_blank" rel="noopener"
              style="flex-shrink:0;background:var(--red);color:#fff;border-radius:6px;padding:5px 10px;font-size:10px;font-weight:700;text-decoration:none;white-space:nowrap">
             ↗ Abrir
           </a>
         </div>
-        ${p.descricao ? `<div style="font-size:10px;color:var(--dim);margin-top:5px;line-height:1.5">${p.descricao}</div>` : ''}
+        ${p.descricao ? `<div style="font-size:10px;color:var(--dim);margin-top:5px;line-height:1.5">${esc(p.descricao)}</div>` : ''}
       </div>
     `).join('');
   } catch(e) {
@@ -3429,14 +3446,14 @@ async function carregarModeracaoPlanta() {
 
     listaEl.innerHTML = plantas.map(p => `
       <div style="background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:10px">
-        <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:3px">${p.titulo}</div>
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:3px">${esc(p.titulo)}</div>
         <div style="font-size:10px;color:var(--sub);margin-bottom:6px">
-          ${p.municipio}${p.bairro ? ' · ' + p.bairro : ''} · ${p.tipo}${p.data_aproximada ? ' · ' + p.data_aproximada : ''}
+          ${esc(p.municipio)}${p.bairro ? ' · ' + esc(p.bairro) : ''} · ${esc(p.tipo)}${p.data_aproximada ? ' · ' + esc(p.data_aproximada) : ''}
         </div>
         <div style="display:flex;gap:6px">
-          <a href="${p.pdf_url}" target="_blank" style="flex:1;text-align:center;padding:6px 0;background:var(--card2);color:var(--sub);border-radius:6px;font-size:10px;font-weight:600;text-decoration:none;border:1px solid var(--border2)">👁 Ver</a>
-          <button onclick="moderarPlanta('${p.id}','aprovado')" style="flex:1;padding:6px 0;background:rgba(39,174,96,.15);color:#27ae60;border:1px solid rgba(39,174,96,.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">✓ Aprovar</button>
-          <button onclick="moderarPlanta('${p.id}','rejeitado')" style="flex:1;padding:6px 0;background:rgba(192,57,43,.12);color:var(--red2);border:1px solid rgba(192,57,43,.25);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">✕ Rejeitar</button>
+          <a href="${safeUrl(p.pdf_url)}" target="_blank" rel="noopener" style="flex:1;text-align:center;padding:6px 0;background:var(--card2);color:var(--sub);border-radius:6px;font-size:10px;font-weight:600;text-decoration:none;border:1px solid var(--border2)">👁 Ver</a>
+          <button onclick="moderarPlanta('${esc(p.id)}','aprovado')" style="flex:1;padding:6px 0;background:rgba(39,174,96,.15);color:#27ae60;border:1px solid rgba(39,174,96,.3);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">✓ Aprovar</button>
+          <button onclick="moderarPlanta('${esc(p.id)}','rejeitado')" style="flex:1;padding:6px 0;background:rgba(192,57,43,.12);color:var(--red2);border:1px solid rgba(192,57,43,.25);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">✕ Rejeitar</button>
         </div>
       </div>
     `).join('');
@@ -3518,15 +3535,15 @@ async function carregarVitalicioPendente() {
       const p = perfilMap[item.user_id] || {};
       return `
         <div style="background:rgba(243,156,18,.06);border:1px solid rgba(243,156,18,.25);border-radius:8px;padding:10px">
-          <div style="font-size:11px;font-weight:700;color:var(--text)">${p.name || 'Usuário'}</div>
-          <div style="font-size:10px;color:var(--sub);margin-bottom:2px">${p.email || ''}</div>
-          <div style="font-size:10px;color:#f39c12;margin-bottom:8px">${item.descricao}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text)">${esc(p.name || 'Usuário')}</div>
+          <div style="font-size:10px;color:var(--sub);margin-bottom:2px">${esc(p.email || '')}</div>
+          <div style="font-size:10px;color:#f39c12;margin-bottom:8px">${esc(item.descricao)}</div>
           <div style="display:flex;gap:6px">
-            <button onclick="concederVitalicio('${item.user_id}')"
+            <button onclick="concederVitalicio('${esc(item.user_id)}')"
               style="flex:1;padding:7px 0;background:linear-gradient(135deg,#f39c12,#e67e22);color:#fff;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">
               🏆 Conceder vitalício
             </button>
-            <button onclick="negarVitalicio('${item.user_id}')"
+            <button onclick="negarVitalicio('${esc(item.user_id)}')"
               style="flex:1;padding:7px 0;background:var(--card2);color:var(--sub);border:1px solid var(--border2);border-radius:6px;font-size:10px;font-weight:600;cursor:pointer">
               Negar
             </button>
@@ -3574,14 +3591,14 @@ async function renderAdminUsers() {
   const profiles = await sbGet('/rest/v1/profiles?select=id,name,role,stripe_customer_id&order=created_at.desc', sess?.access_token);
   if (!profiles?.length) { el.innerHTML='<div class="empty-state">Nenhum usuário</div>'; return; }
   el.innerHTML = profiles.map(u => {
-    const i = u.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    const nome = (u.name && String(u.name).trim()) || 'Sem nome';
     return `<div class="adm-user-card">
-      <div class="auc-av" style="background:${ROLE_COLORS[u.role]||'#555'}">${i}</div>
+      <div class="auc-av" style="background:${ROLE_COLORS[u.role]||'#555'}">${esc(_initials(nome))}</div>
       <div class="auc-info">
-        <div class="auc-name">${u.name}</div>
+        <div class="auc-name">${esc(nome)}</div>
         <div class="auc-user">${u.stripe_customer_id?'💳 assinante':'○ sem assinatura'}</div>
       </div>
-      <select class="adm-sel" style="font-size:10px;padding:4px 6px" onchange="changeRole('${u.id}',this.value)">
+      <select class="adm-sel" style="font-size:10px;padding:4px 6px" onchange="changeRole('${esc(u.id)}',this.value)">
         <option value="operador"     ${u.role==='operador'?'selected':''}>Operador</option>
         <option value="visualizador" ${u.role==='visualizador'?'selected':''}>Visualizador</option>
         <option value="admin"        ${u.role==='admin'?'selected':''}>Admin</option>
@@ -5954,7 +5971,7 @@ async function reurbCarregarProjetos() {
   const sel = document.getElementById('reurb-proj-sel');
   const cur = sel.value;
   sel.innerHTML = '<option value="">— Selecione um projeto —</option>' +
-    _reurbProjetos.map(p => `<option value="${p.id}">${p.nome} — ${p.municipio}</option>`).join('');
+    _reurbProjetos.map(p => `<option value="${esc(p.id)}">${esc(p.nome)} — ${esc(p.municipio)}</option>`).join('');
   if (cur) sel.value = cur;
 }
 
@@ -6064,16 +6081,16 @@ function reurbRenderList(lotes) {
     return;
   }
   el.innerHTML = lotes.map(l => {
-    const label = [l.quadra ? `Qd.${l.quadra}` : '', l.numero_lote ? `Lote ${l.numero_lote}` : ''].filter(Boolean).join(' · ') || 'Sem identificação';
+    const label = [l.quadra ? `Qd.${esc(l.quadra)}` : '', l.numero_lote ? `Lote ${esc(l.numero_lote)}` : ''].filter(Boolean).join(' · ') || 'Sem identificação';
     const area  = l.area_m2 ? (l.area_m2 >= 10000 ? (l.area_m2/10000).toFixed(2)+' ha' : l.area_m2.toFixed(1)+' m²') : '—';
     const driveIcon = l.drive_folder_url ? '<span title="Drive vinculado" style="color:#27ae60;font-size:11px">📂</span>' : '';
-    return `<div class="reurb-lote-item" id="rli-${l.id}" onclick="reurbAbrirLote_byId('${l.id}')">
-      <div class="rli-dot ${l.status}" style="${l.drive_folder_url?'background:#27ae60':''}"></div>
+    return `<div class="reurb-lote-item" id="rli-${esc(l.id)}" onclick="reurbAbrirLote_byId('${esc(l.id)}')">
+      <div class="rli-dot ${esc(l.status)}" style="${l.drive_folder_url?'background:#27ae60':''}"></div>
       <div class="rli-body">
         <span class="rli-num">${label} ${driveIcon}</span>
-        <span class="rli-sub">${area}${l.proprietario ? ' · ' + l.proprietario : ''}</span>
+        <span class="rli-sub">${area}${l.proprietario ? ' · ' + esc(l.proprietario) : ''}</span>
       </div>
-      <span class="rli-zoom" title="Zoom no mapa" onclick="event.stopPropagation();reurbZoomLote('${l.id}')">🎯</span>
+      <span class="rli-zoom" title="Zoom no mapa" onclick="event.stopPropagation();reurbZoomLote('${esc(l.id)}')">🎯</span>
     </div>`;
   }).join('');
 }
@@ -6137,7 +6154,7 @@ function reurbAbrirLote(lote, mapLayer) {
   const driveMsg  = document.getElementById('rlp-drive-save-msg');
 
   if (lote.drive_folder_url) {
-    driveBtn.href = lote.drive_folder_url;
+    driveBtn.href = safeUrl(lote.drive_folder_url);
     driveBtn.style.display = 'flex';
     noDrive.style.display  = 'none';
   } else {
@@ -6155,11 +6172,11 @@ function reurbAbrirLote(lote, mapLayer) {
 
   // Infos do lote
   document.getElementById('rlp-props-body').innerHTML = [
-    lote.quadra      ? `<div><b style="color:var(--dim)">Quadra:</b> ${lote.quadra}</div>` : '',
-    lote.numero_lote ? `<div><b style="color:var(--dim)">Lote:</b> ${lote.numero_lote}</div>` : '',
+    lote.quadra      ? `<div><b style="color:var(--dim)">Quadra:</b> ${esc(lote.quadra)}</div>` : '',
+    lote.numero_lote ? `<div><b style="color:var(--dim)">Lote:</b> ${esc(lote.numero_lote)}</div>` : '',
     lote.area_m2     ? `<div><b style="color:var(--dim)">Área:</b> ${area}</div>` : '',
-    lote.proprietario? `<div><b style="color:var(--dim)">Proprietário:</b> ${lote.proprietario}</div>` : '',
-    lote.obs         ? `<div><b style="color:var(--dim)">Obs:</b> ${lote.obs}</div>` : '',
+    lote.proprietario? `<div><b style="color:var(--dim)">Proprietário:</b> ${esc(lote.proprietario)}</div>` : '',
+    lote.obs         ? `<div><b style="color:var(--dim)">Obs:</b> ${esc(lote.obs)}</div>` : '',
   ].filter(Boolean).join('') || '<span style="color:var(--dim)">—</span>';
 
   document.getElementById('reurb-lote-panel').classList.add('open');
@@ -6235,7 +6252,7 @@ function reurbAbrirImport() {
   const sel = document.getElementById('rimp-proj-sel');
   if (sel) {
     sel.innerHTML = '<option value="">— Selecione o projeto —</option>' +
-      _reurbProjetos.map(p => `<option value="${p.id}">${p.nome} — ${p.municipio}</option>`).join('');
+      _reurbProjetos.map(p => `<option value="${esc(p.id)}">${esc(p.nome)} — ${esc(p.municipio)}</option>`).join('');
     if (_reurbCurProjId) sel.value = _reurbCurProjId;
   }
   const proj = _reurbProjetos.find(p => p.id === _reurbCurProjId);
