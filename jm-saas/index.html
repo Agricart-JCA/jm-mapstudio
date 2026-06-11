@@ -4601,7 +4601,12 @@ function fundSetMode(mode) {
   }
   if (gpsSub) gpsSub.style.display = gpsOn ? 'block' : 'none';
 
-  if (mode === 'car')   { toast('🌱 CAR ativo — imóveis SICAR visíveis no mapa', 'ok'); _carSetupWms(); }
+  if (mode === 'car') {
+    toast('🌱 CAR ativo — imóveis SICAR visíveis no mapa', 'ok');
+    // Se estiver muito afastado, aproxima pra já mostrar os polígonos (moveend dispara o WMS)
+    if (map.getZoom() < CAR_MIN_ZOOM) map.setZoom(CAR_MIN_ZOOM + 1);
+    else _carSetupWms();
+  }
   if (mode === 'sigef') toast('🏛 SIGEF ativo — clique no mapa ou use o GPS', 'ok');
 }
 
@@ -4799,24 +4804,39 @@ function _sigefRemoveWms() {
   _sigefWmsOk   = false;
 }
 
-// ── CAR WMS tiles — exibe polígonos sem CORS, sem limite de features ──
+// ── CAR WMS tiles — leve e rápido ─────────────────────────────
+// Otimizações: 1 só camada (estado central) = 2x mais rápido que multi-camada;
+// zoom mínimo (não renderiza estado inteiro de longe); só pede tiles quando o
+// mapa para de mover. Em divisa de estado, basta arrastar que troca de UF.
+const CAR_MIN_ZOOM = 11;
 function _carSetupWms() {
   if (_fundMode !== 'car') return;
-  const ufs = _ufsInBounds(map.getBounds());          // todos os estados visíveis
-  const chave = ufs.slice().sort().join(',');
-  if (_carWmsLayer && _carWmsUf === chave) return;     // nada mudou
-  if (_carWmsLayer) { try { map.removeLayer(_carWmsLayer); } catch(e) {} _carWmsLayer = null; }
-  _carWmsUf = chave;
-  const layers = ufs.map(u => `sicar:sicar_imoveis_${u.toLowerCase()}`).join(',');
-  const rotulo = ufs.join('/');
   const hint = document.getElementById('fund-mode-hint');
-  if (hint) hint.textContent = `🌱 Carregando imóveis CAR (${rotulo})…`;
+
+  // Zoom afastado: renderizar o estado inteiro é pesado e ilegível → pede pra aproximar
+  if (map.getZoom() < CAR_MIN_ZOOM) {
+    _carRemoveWms();
+    if (hint) hint.textContent = '🔍 Aproxime o mapa para carregar os imóveis CAR';
+    return;
+  }
+
+  const uf = _latLonToUF(map.getCenter().lat, map.getCenter().lng).toLowerCase();
+  if (_carWmsLayer && _carWmsUf === uf) return;        // mesmo estado, nada a fazer
+  if (_carWmsLayer) { try { map.removeLayer(_carWmsLayer); } catch(e) {} _carWmsLayer = null; }
+  _carWmsUf = uf;
+  if (hint) hint.textContent = `🌱 Carregando imóveis CAR de ${uf.toUpperCase()}…`;
   try {
     _carWmsLayer = L.tileLayer.wms(SICAR_WFS, {
-      layers, format:'image/png', transparent:true, version:'1.1.1', opacity:0.85
+      layers: `sicar:sicar_imoveis_${uf}`,
+      format: 'image/png', transparent: true, version: '1.1.1', opacity: 0.85,
+      // Performance:
+      updateWhenIdle: true,      // não dispara requests durante o arraste
+      updateWhenZooming: false,  // espera o zoom terminar
+      keepBuffer: 2,             // reaproveita tiles vizinhos ao mover
+      crossOrigin: true
     });
     _carWmsLayer.on('load', () => {
-      if (_fundMode === 'car' && hint) hint.textContent = `🌱 Imóveis CAR no mapa (${rotulo}) — toque num polígono ou use o GPS`;
+      if (_fundMode === 'car' && hint) hint.textContent = `🌱 Imóveis CAR de ${uf.toUpperCase()} no mapa — toque num polígono ou use o GPS`;
     });
     _carWmsLayer.on('tileerror', () => {
       if (_fundMode === 'car' && hint) hint.textContent = `⚠ SICAR instável agora — tente o botão GPS ou clique no mapa`;
