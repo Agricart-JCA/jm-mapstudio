@@ -98,7 +98,10 @@ create trigger plantas_updated_at
 --   1 planta  → 1 mês grátis  (automático)
 --   5 plantas → 3 meses grátis (automático)
 --   10+ plantas → solicita vitalício para avaliação humana do ADM
-create or replace function public.aprovar_planta(planta_uuid uuid, admin_uuid uuid)
+-- 1 argumento; o admin é identificado por auth.uid() (não dá pra spoofar).
+drop function if exists public.aprovar_planta(uuid, uuid);
+drop function if exists public.aprovar_planta(uuid);
+create or replace function public.aprovar_planta(planta_uuid uuid)
 returns jsonb
 language plpgsql security definer as $$
 declare
@@ -108,7 +111,13 @@ declare
   v_desc        text;
   v_expires     timestamptz;
   v_vitalicio   boolean := false;
+  v_admin       uuid := auth.uid();
 begin
+  -- SEGURANÇA: só admin aprova (senão qualquer um aprova a própria planta e ganha acesso grátis)
+  if not public.is_admin() then
+    return jsonb_build_object('ok', false, 'msg', 'Acesso negado');
+  end if;
+
   select contribuidor_id into v_contrib
   from public.plantas where id = planta_uuid;
 
@@ -119,7 +128,7 @@ begin
   -- Aprova a planta
   update public.plantas set
     status       = 'aprovado',
-    moderado_por = admin_uuid,
+    moderado_por = v_admin,
     moderado_em  = now()
   where id = planta_uuid;
 
@@ -173,17 +182,15 @@ end;
 $$;
 
 -- 7. Função: conceder vitalício manualmente pelo ADM
-create or replace function public.conceder_vitalicio(user_uuid uuid, admin_uuid uuid)
+-- 1 argumento; o admin é identificado por auth.uid() (não dá pra spoofar).
+drop function if exists public.conceder_vitalicio(uuid, uuid);
+drop function if exists public.conceder_vitalicio(uuid);
+create or replace function public.conceder_vitalicio(user_uuid uuid)
 returns jsonb
 language plpgsql security definer as $$
-declare
-  v_is_admin boolean;
 begin
-  -- Verifica que quem chama é admin
-  select exists(select 1 from public.profiles where id = admin_uuid and role = 'admin')
-  into v_is_admin;
-
-  if not v_is_admin then
+  -- Verifica que quem chama é admin (via auth.uid(), não via parâmetro)
+  if not public.is_admin() then
     return jsonb_build_object('ok', false, 'msg', 'Apenas administradores podem conceder vitalício');
   end if;
 
