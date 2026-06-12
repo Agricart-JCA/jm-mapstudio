@@ -106,7 +106,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
   flex-shrink:0;
   background:rgba(255,255,255,.02);
 }
-#dropzone:hover,.dragover { border-color:var(--red) !important; background:var(--red-a) !important; }
+#dropzone:hover,.dragover { border-color:var(--neon) !important; background:var(--neon-a) !important; box-shadow:0 0 0 1px rgba(41,224,212,.2), inset 0 0 20px rgba(41,224,212,.06); }
 #dropzone .dz-icon { font-size:22px; margin-bottom:5px; }
 #dropzone strong { color:var(--text); font-size:12px; display:block; margin-bottom:3px; }
 #dropzone p { font-size:10px; color:var(--sub); line-height:1.5; }
@@ -754,10 +754,21 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 .force-footer { font-size:10px; color:var(--dim); text-align:center; margin-top:10px; line-height:1.6; }
 
 .price-card {
-  border:1.5px solid var(--border2); border-radius:10px; padding:14px 16px;
-  cursor:pointer; transition:all .18s; background:var(--card);
+  position:relative; overflow:hidden;
+  border:1.5px solid var(--border2); border-radius:12px; padding:15px 16px;
+  cursor:pointer; transition:all .18s; background:linear-gradient(150deg,var(--card2),var(--card));
 }
-.price-card:hover { border-color:var(--red); background:var(--red-a); transform:translateY(-1px); }
+.price-card::before {
+  content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:var(--grad-btn); opacity:0; transition:opacity .18s;
+}
+.price-card:hover {
+  border-color:var(--red); transform:translateY(-2px);
+  box-shadow:0 0 0 1px rgba(231,76,60,.3), 0 10px 26px rgba(192,57,43,.25);
+}
+.price-card:hover::before { opacity:1; }
+#card-anual:hover { border-color:var(--green); box-shadow:0 0 0 1px rgba(39,174,96,.3), 0 10px 26px rgba(39,174,96,.22); }
+#card-anual::before { background:var(--grad-green); }
 /* ─ Subscription required overlay ─ */
 #sub-required-overlay {
   display:none; position:fixed; inset:0; z-index:9998;
@@ -1292,7 +1303,9 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       </div>
       <!-- Botão trial -->
       <button id="btn-trial" onclick="startTrial()"
-        style="width:100%;padding:12px;border-radius:10px;border:1.5px dashed var(--border2);background:transparent;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s">
+        style="width:100%;padding:13px;border-radius:11px;border:1.5px dashed var(--neon);background:var(--neon-a);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;letter-spacing:.3px"
+        onmouseover="this.style.boxShadow='0 0 0 1px rgba(41,224,212,.4),0 6px 18px rgba(41,224,212,.2)';this.style.transform='translateY(-1px)'"
+        onmouseout="this.style.boxShadow='none';this.style.transform='none'">
         🎁 Testar grátis por 30 dias
       </button>
 
@@ -1595,12 +1608,12 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:7px">
       <input type="text" id="share-name" placeholder="Nome/descrição (opcional)" maxlength="60"
              style="width:100%;background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--text);font-family:var(--font);outline:none;box-sizing:border-box;">
-      <button onclick="gerarLinkLocalizacao()"
-              style="width:100%;padding:10px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);">
+      <button onclick="gerarLinkLocalizacao()" class="btn-techno green"
+              style="width:100%;padding:11px;font-size:12px;border-radius:9px">
         📍 Usar meu GPS
       </button>
-      <button onclick="ativarPickNoMapa()"  id="btn-pick-map"
-              style="width:100%;padding:10px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);">
+      <button onclick="ativarPickNoMapa()" id="btn-pick-map" class="btn-techno blue"
+              style="width:100%;padding:11px;font-size:12px;border-radius:9px">
         🗺 Escolher ponto no mapa
       </button>
     </div>
@@ -1680,7 +1693,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
         Clique em um município no mapa ou pesquise abaixo
       </div>
       <!-- Botão GPS — consulta CAR/SIGEF na localização atual (diferencial de campo) -->
-      <button id="fund-gps-btn" onclick="fundConsultarGPS()" style="display:none;width:100%;margin-top:7px;padding:11px;border:none;border-radius:9px;font-size:12px;font-weight:800;cursor:pointer;font-family:var(--font);color:#fff;background:linear-gradient(135deg,#27ae60,#1e8449);box-shadow:0 3px 12px rgba(39,174,96,.35);display:none;align-items:center;justify-content:center;gap:8px">
+      <button id="fund-gps-btn" onclick="fundConsultarGPS()" class="btn-techno green" style="display:none;width:100%;margin-top:7px;padding:12px;font-size:12px;align-items:center;justify-content:center;gap:8px">
         <span style="font-size:16px">📍</span> Consultar onde estou agora
       </button>
       <div id="fund-gps-sub" style="display:none;margin-top:4px;font-size:9px;text-align:center;color:var(--dim)">
@@ -1825,7 +1838,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
         Contribua com o acervo e ganhe acesso gratuito.<br>
         <strong style="color:#f39c12">1 planta = 1 mês grátis &nbsp;·&nbsp; 5 plantas = 3 meses &nbsp;·&nbsp; 10+ = acesso vitalício</strong>
       </div>
-      <button onclick="abrirModalContribuicao()" style="width:100%;padding:10px;background:var(--red);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
+      <button onclick="abrirModalContribuicao()" class="btn-techno" style="width:100%;padding:11px;font-size:12px;border-radius:9px">
         📤 Contribuir com planta
       </button>
     </div>
@@ -4664,18 +4677,20 @@ function fundSetMode(mode) {
   _fundMode = mode;
   _fundModoCAR = (mode === 'car');
 
-  // ── Botões do menu ──
+  // ── Botões do menu (segmented control techno) ──
   const cores = {
-    municipios: { bg:'var(--red)',   txt:'#fff'         },
-    car:        { bg:'#27ae60',      txt:'#fff'         },
-    sigef:      { bg:'#2980b9',      txt:'#fff'         },
+    municipios: { bg:'var(--grad-btn)',   glow:'0 3px 14px rgba(192,57,43,.5)' },
+    car:        { bg:'var(--grad-green)', glow:'0 3px 14px rgba(39,174,96,.5)' },
+    sigef:      { bg:'var(--grad-blue)',  glow:'0 3px 14px rgba(41,128,185,.5)' },
   };
   ['municipios','car','sigef'].forEach(m => {
     const btn = document.getElementById('fund-btn-' + (m==='municipios'?'mun':m));
     if (!btn) return;
     const active = m === mode;
     btn.style.background = active ? cores[m].bg : 'transparent';
-    btn.style.color      = active ? cores[m].txt : 'var(--sub)';
+    btn.style.color      = active ? '#fff' : 'var(--sub)';
+    btn.style.boxShadow  = active ? (cores[m].glow + ', inset 0 1px 0 rgba(255,255,255,.25)') : 'none';
+    btn.style.transform  = active ? 'translateY(-1px)' : 'none';
   });
 
   // ── Hint dinâmico ──
