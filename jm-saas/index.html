@@ -32,15 +32,47 @@
   --green:   #27ae60;
   --amber:   #f39c12;
   --font:    'Segoe UI',system-ui,-apple-system,sans-serif;
+  --mono:    'SF Mono','JetBrains Mono','Consolas',ui-monospace,monospace;
+  /* ── Acento techno ── */
+  --neon:    #29e0d4;
+  --neon-a:  rgba(41,224,212,.14);
+  /* ── Gradientes e brilhos ── */
+  --grad-btn:  linear-gradient(135deg,#e74c3c 0%,#c0392b 60%,#a32619 100%);
+  --grad-blue: linear-gradient(135deg,#3aa0d8 0%,#2980b9 60%,#1f6391 100%);
+  --grad-green:linear-gradient(135deg,#2ecc71 0%,#27ae60 60%,#1e8a4c 100%);
+  --glow-red:  0 6px 20px rgba(192,57,43,.42), inset 0 1px 0 rgba(255,255,255,.22);
+  --glow-red-h:0 10px 30px rgba(192,57,43,.6),  inset 0 1px 0 rgba(255,255,255,.3);
+  --ring-red:  0 0 0 3px rgba(231,76,60,.18);
 }
+/* ═══ BOTÃO TECHNO (reutilizável) ═══ */
+.btn-techno{
+  position:relative; overflow:hidden; cursor:pointer;
+  border:none; border-radius:11px; color:#fff;
+  font-family:var(--font); font-weight:800; letter-spacing:.5px;
+  background:var(--grad-btn); box-shadow:var(--glow-red);
+  transition:transform .12s ease, box-shadow .2s ease, filter .2s ease;
+}
+.btn-techno:hover{ transform:translateY(-1px); box-shadow:var(--glow-red-h); filter:brightness(1.06); }
+.btn-techno:active{ transform:translateY(0); filter:brightness(.98); }
+.btn-techno:disabled{ opacity:.55; cursor:default; transform:none; box-shadow:none; filter:grayscale(.3); }
+.btn-techno::after{ /* brilho deslizante */
+  content:''; position:absolute; top:0; left:-130%; width:55%; height:100%;
+  background:linear-gradient(105deg,transparent,rgba(255,255,255,.38),transparent);
+  transform:skewX(-18deg); transition:left .55s ease; pointer-events:none;
+}
+.btn-techno:hover::after{ left:140%; }
+.btn-techno.blue { background:var(--grad-blue);  box-shadow:0 6px 20px rgba(41,128,185,.42),inset 0 1px 0 rgba(255,255,255,.22); }
+.btn-techno.green{ background:var(--grad-green); box-shadow:0 6px 20px rgba(39,174,96,.42), inset 0 1px 0 rgba(255,255,255,.22); }
+.mono{ font-family:var(--mono); letter-spacing:.3px; }
 body { font-family:var(--font); background:var(--bg); color:var(--text); display:flex; height:100vh; overflow:hidden; }
 
 /* ═══ SIDEBAR ═══ */
 #sidebar {
   width:310px; min-width:310px;
-  background:var(--panel);
+  background:linear-gradient(180deg,#121b24 0%,#0e151d 100%);
   display:flex; flex-direction:column;
-  border-right:1px solid var(--border);
+  border-right:1px solid var(--border2);
+  box-shadow:1px 0 0 rgba(41,224,212,.06), 8px 0 30px rgba(0,0,0,.35);
   overflow:hidden;
 }
 
@@ -105,8 +137,9 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
   border-radius:7px; cursor:pointer; transition:all .15s; white-space:nowrap;
   font-family:var(--font);
 }
-.draw-btn:hover { border-color:var(--red); color:var(--text); background:var(--red-a); }
+.draw-btn:hover { border-color:var(--red); color:var(--text); background:var(--red-a); box-shadow:0 0 0 1px rgba(231,76,60,.25), 0 4px 14px rgba(192,57,43,.22); transform:translateY(-1px); }
 .draw-btn.danger:hover { border-color:var(--red2); background:rgba(231,76,60,.1); color:var(--red2); }
+.draw-btn:active { transform:translateY(0); }
 .draw-btn:disabled { opacity:.3; cursor:default; pointer-events:none; }
 
 /* ─ Edit panel ─ */
@@ -329,10 +362,10 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 @keyframes toastIn { from{opacity:0;transform:translateX(8px)} to{opacity:1;transform:none} }
 
 /* ─ Scrollbar ─ */
-::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar { width:5px; height:5px; }
 ::-webkit-scrollbar-track { background:transparent; }
-::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
-::-webkit-scrollbar-thumb:hover { background:var(--dim); }
+::-webkit-scrollbar-thumb { background:linear-gradient(180deg,var(--border2),var(--dim)); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:linear-gradient(180deg,var(--red),var(--red2)); }
 
 /* ─ Leaflet popup ─ */
 .leaflet-popup-content-wrapper { background:var(--card2) !important; color:var(--text) !important; border:1px solid var(--border2) !important; border-radius:10px !important; box-shadow:0 8px 40px rgba(0,0,0,.8) !important; }
@@ -610,7 +643,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
   color:var(--text); font-size:13px; outline:none;
   font-family:var(--font); transition:border-color .15s; box-sizing:border-box;
 }
-.lf-inp:focus { border-color:var(--red); }
+.lf-inp:focus { border-color:var(--red); box-shadow:var(--ring-red); }
 .lf-inp::placeholder { color:var(--dim); }
 #login-err { font-size:12px; color:#e74c3c; min-height:18px; margin-bottom:6px; text-align:center; font-weight:600; }
 #login-btn {
@@ -878,12 +911,22 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 #otp-input:focus { border-color:var(--red); }
 #otp-timer { font-size:11px; color:var(--sub); margin-top:10px; min-height:16px; }
 .lf-sub-btn {
-  width:100%; padding:14px; background:var(--red); color:#fff;
-  border:none; border-radius:10px; font-size:14px; font-weight:700;
-  cursor:pointer; transition:background .15s; font-family:var(--font); letter-spacing:.4px;
+  position:relative; overflow:hidden;
+  width:100%; padding:15px; background:var(--grad-btn); color:#fff;
+  border:none; border-radius:11px; font-size:14px; font-weight:800;
+  cursor:pointer; font-family:var(--font); letter-spacing:.5px;
+  box-shadow:var(--glow-red);
+  transition:transform .12s ease, box-shadow .2s ease, filter .2s ease;
 }
-.lf-sub-btn:hover { background:var(--red2); }
-.lf-sub-btn:disabled { opacity:.6; cursor:default; }
+.lf-sub-btn:hover { transform:translateY(-1px); box-shadow:var(--glow-red-h); filter:brightness(1.06); }
+.lf-sub-btn:active { transform:translateY(0); filter:brightness(.98); }
+.lf-sub-btn::after {
+  content:''; position:absolute; top:0; left:-130%; width:55%; height:100%;
+  background:linear-gradient(105deg,transparent,rgba(255,255,255,.38),transparent);
+  transform:skewX(-18deg); transition:left .55s ease; pointer-events:none;
+}
+.lf-sub-btn:hover::after { left:140%; }
+.lf-sub-btn:disabled { opacity:.55; cursor:default; transform:none; box-shadow:none; filter:grayscale(.3); }
 
 /* ═══ CAMADA FUNDIÁRIA — Leaflet ═══ */
 .fund-polygon         { transition: fill-opacity .15s, stroke-width .15s; }
@@ -904,7 +947,8 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
   border-radius:10px; padding:10px 12px;
   transition:border-color .15s;
 }
-.fund-card:hover { border-color:var(--dim); }
+.fund-card:hover { border-color:rgba(41,224,212,.4); box-shadow:0 0 0 1px rgba(41,224,212,.15), 0 6px 18px rgba(0,0,0,.3); transform:translateY(-1px); }
+.fund-card { transition:border-color .15s, box-shadow .2s, transform .15s; }
 .fund-card-header { display:flex; align-items:flex-start; gap:10px; }
 .fund-card-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; margin-top:3px; }
 .fund-card-title { font-size:12px; font-weight:700; color:var(--text); line-height:1.3; }
@@ -936,7 +980,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
   font-family:var(--font); line-height:1.3;
 }
 .tab-btn:hover { color:var(--text); }
-.tab-btn.active { color:var(--red); border-bottom-color:var(--red); }
+.tab-btn.active { color:var(--red); border-bottom-color:var(--red); text-shadow:0 0 14px rgba(231,76,60,.55); }
 .tab-btn .tab-icon { font-size:15px; display:block; margin-bottom:2px; }
 
 .tab-panel { display:none; flex-direction:column; flex:1; overflow-y:auto; overflow-x:hidden; min-height:0; }
