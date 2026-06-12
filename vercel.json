@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "comment": "Forca o Vercel a publicar SEMPRE a pasta jm-saas/ (app atual), inclusive no auto-deploy do GitHub. Evita servir o index.html antigo da raiz do repositorio.",
+  "outputDirectory": "jm-saas",
+  "buildCommand": null,
+  "framework": null
+}
