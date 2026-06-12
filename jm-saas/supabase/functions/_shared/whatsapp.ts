@@ -2,9 +2,29 @@
 // whatsapp.ts — Envio via Meta WhatsApp Cloud API
 // ─────────────────────────────────────────────────────────────
 
-import type { Municipio, ImovelCAR, EmbargoIBAMA } from './geo.ts';
+import type { Municipio, ImovelCAR, EmbargoIBAMA, ParcelaSIGEF, PlantaPAL } from './geo.ts';
 
 const GRAPH_API = 'https://graph.facebook.com/v19.0';
+const MAP_BASE  = 'https://jm-saas.vercel.app';
+const INCRA_ACERVO = 'https://acervofundiario.incra.gov.br/acervo/acv.php';
+
+// URL de imagem de mapa para sendImage.
+// Padrão: WMS GetMap do SICAR (sem chave, confiável) mostrando as parcelas CAR
+// ao redor do ponto, sobre fundo branco. Para um mapa com base (ruas/satélite),
+// configure o secret STATIC_MAP_TEMPLATE com {lat} {lon} {zoom} — ex. Geoapify/MapTiler.
+export function mapImageUrl(lat: number, lon: number, zoom = 15): string {
+  const tpl = Deno.env.get('STATIC_MAP_TEMPLATE');
+  if (tpl) {
+    return tpl.replace(/{lat}/g, String(lat)).replace(/{lon}/g, String(lon)).replace(/{zoom}/g, String(zoom));
+  }
+  // Fallback keyless: SICAR WMS GetMap (parcelas CAR do RJ, fundo branco)
+  const d = 0.012; // ~1,3 km de raio
+  const bbox = `${lon - d},${lat - d},${lon + d},${lat + d}`;
+  return 'https://geoserver.car.gov.br/geoserver/sicar/ows?service=WMS&request=GetMap' +
+    '&layers=sicar:sicar_imoveis_rj&version=1.1.1&srs=EPSG:4326' +
+    '&format=image/png&width=640&height=480&bgcolor=0xFFFFFF&transparent=false' +
+    `&bbox=${bbox}`;
+}
 
 function phoneId(): string { return Deno.env.get('WHATSAPP_PHONE_ID') ?? ''; }
 function token():   string { return Deno.env.get('WHATSAPP_TOKEN')    ?? ''; }
@@ -28,6 +48,13 @@ export async function sendText(to: string, text: string): Promise<boolean> {
   });
 }
 
+export async function sendImage(to: string, imageUrl: string, caption = ''): Promise<boolean> {
+  return postMessage({
+    messaging_product: 'whatsapp', to, type: 'image',
+    image: { link: imageUrl, caption: caption.slice(0, 1024) },
+  });
+}
+
 export async function markRead(messageId: string): Promise<void> {
   await fetch(`${GRAPH_API}/${phoneId()}/messages`, {
     method: 'POST',
@@ -39,16 +66,20 @@ export async function markRead(messageId: string): Promise<void> {
 // ── Mensagem de boas-vindas ───────────────────────────────────
 export function msgBoasVindas(): string {
   return (
-    '👋 *Bem-vindo ao JM MapStudio!*\n\n' +
-    'Consulte dados fundiários de qualquer imóvel rural diretamente aqui.\n\n' +
-    '📍 *Envie sua localização* para consultar o ponto no mapa\n' +
-    '🔎 *Digite o código CAR* para buscar por imóvel\n' +
-    '   _Ex: RJ-3304557-XXXXXXXXXXXX_\n\n' +
-    '💬 *Comandos disponíveis:*\n' +
-    '  • *ajuda* — exibe este menu\n' +
-    '  • *CAR [código]* — busca imóvel pelo código\n\n' +
-    '🌐 Acesse o mapa completo:\n' +
-    'https://agricart-jca.github.io/jm-mapstudio'
+    '👋 *Bem-vindo ao JM MapStudio!*\n' +
+    '_Consulta fundiária do RJ direto no WhatsApp_\n\n' +
+    '📍 *Envie sua localização* e receba tudo do ponto:\n' +
+    '   CAR · SIGEF · plantas · embargos IBAMA\n\n' +
+    '🔢 *Ou escolha uma consulta:*\n' +
+    '  *1* — 🌱 CAR (digite: CAR + código)\n' +
+    '  *2* — 🏛 SIGEF (digite: SIGEF + código/matrícula)\n' +
+    '  *3* — 🗺 Plantas (digite: PLANTA + município)\n\n' +
+    '💬 *Exemplos:*\n' +
+    '  • _CAR RJ-3304557-XXXXXXXXXXXX_\n' +
+    '  • _SIGEF 5120100113558_\n' +
+    '  • _PLANTA Seropédica_\n\n' +
+    'Digite *ajuda* a qualquer momento.\n' +
+    `🌐 Mapa completo: ${MAP_BASE}`
   );
 }
 
@@ -58,72 +89,136 @@ export function formatarRelatorio(params: {
   lon: number;
   municipio: Municipio | null;
   imoveis: ImovelCAR[];
+  sigef: ParcelaSIGEF[];
   embargos: EmbargoIBAMA[];
+  plantas: PlantaPAL[];
   temPlantas: boolean;
   linkPlantas: string;
   linkMapa: string;
 }): string {
-  const { lat, lon, municipio, imoveis, embargos, temPlantas, linkPlantas, linkMapa } = params;
+  const { lat, lon, municipio, imoveis, sigef, embargos, plantas, linkMapa } = params;
   const linhas: string[] = [];
 
   linhas.push('📍 *Relatório Fundiário — JM MapStudio*');
-  linhas.push(`📌 Coordenadas: \`${lat.toFixed(6)}, ${lon.toFixed(6)}\``);
+  linhas.push(`📌 \`${lat.toFixed(6)}, ${lon.toFixed(6)}\``);
   linhas.push('');
 
   // Município
   if (municipio) {
-    linhas.push('🏙️ *MUNICÍPIO*');
-    linhas.push(`  Nome: *${municipio.nome} — ${municipio.uf}*`);
-    linhas.push(`  Área: ${municipio.areaKm2.toFixed(0)} km²`);
-    linhas.push(`  IBGE: ${municipio.codigo}`);
+    linhas.push(`🏙️ *${municipio.nome} — ${municipio.uf}*  ·  IBGE ${municipio.codigo}`);
   } else {
-    linhas.push('⚠️ Município não identificado fora do RJ.');
+    linhas.push('⚠️ Município não identificado (cobertura: RJ).');
   }
 
   // CAR / SICAR
   linhas.push('');
   linhas.push('🌱 *CAR / SICAR*');
   if (imoveis.length > 0) {
-    linhas.push(`  ${imoveis.length} imóvel(is) encontrado(s):`);
+    linhas.push(`  ${imoveis.length} imóvel(is):`);
     for (const im of imoveis.slice(0, 3)) {
       linhas.push(`  ▸ ${im.codigo}`);
-      linhas.push(`     Área: ${im.area} | ${im.tipo}`);
-      linhas.push(`     Status: ${im.situacao}`);
+      linhas.push(`     ${im.area} · ${im.tipo} · ${im.situacao}`);
     }
-    if (imoveis.length > 3)
-      linhas.push(`  _(+${imoveis.length - 3} outros — veja no mapa)_`);
+    if (imoveis.length > 3) linhas.push(`  _(+${imoveis.length - 3} no mapa)_`);
   } else {
-    linhas.push('  Nenhum imóvel CAR encontrado nessa área.');
+    linhas.push('  Nenhum imóvel CAR nesse ponto.');
+  }
+
+  // SIGEF / INCRA
+  linhas.push('');
+  linhas.push('🏛 *SIGEF / INCRA*');
+  if (sigef.length > 0) {
+    linhas.push(`  ${sigef.length} parcela(s) certificada(s):`);
+    for (const pc of sigef.slice(0, 3)) {
+      linhas.push(`  ▸ ${pc.nome || pc.imovel || pc.codigo}`);
+      linhas.push(`     ${pc.area} · ${pc.status}${pc.matricula ? ' · Matríc. ' + pc.matricula : ''}`);
+    }
+    if (sigef.length > 3) linhas.push(`  _(+${sigef.length - 3} no mapa)_`);
+  } else {
+    linhas.push('  Nenhuma parcela SIGEF nesse ponto.');
   }
 
   // Embargos IBAMA
   linhas.push('');
-  linhas.push('🚨 *EMBARGOS IBAMA*');
   if (embargos.length > 0) {
-    linhas.push(`  ⚠️ ${embargos.length} embargo(s) encontrado(s):`);
+    linhas.push(`🚨 *EMBARGOS IBAMA* — ${embargos.length}`);
     for (const em of embargos.slice(0, 2)) {
-      linhas.push(`  ▸ TAI: ${em.numTai}`);
-      linhas.push(`     Área: ${em.area} | ${em.situacao}`);
-      linhas.push(`     Emissão: ${em.dataEmissao}`);
+      linhas.push(`  ▸ TAI ${em.numTai} · ${em.area} · ${em.situacao}`);
     }
   } else {
-    linhas.push('  ✅ Sem embargos IBAMA na área.');
+    linhas.push('🚨 *EMBARGOS IBAMA*: ✅ nenhum');
   }
 
-  // Plantas históricas
-  if (temPlantas && linkPlantas) {
+  // Plantas PAL
+  if (plantas.length > 0) {
     linhas.push('');
-    linhas.push('🗺️ *PLANTAS HISTÓRICAS*');
-    linhas.push(`  📂 ${linkPlantas}`);
+    linhas.push(`🗺️ *PLANTAS / PAL* — ${plantas.length} no acervo`);
+    for (const pl of plantas.slice(0, 3)) {
+      linhas.push(`  ▸ ${pl.titulo}${pl.bairro ? ' · ' + pl.bairro : ''}`);
+    }
+    linhas.push(`  📂 Ver no mapa (aba Fundiário)`);
   }
 
-  // Link do mapa
   linhas.push('');
   linhas.push('──────────────────');
-  linhas.push(`🔗 Ver no mapa: ${linkMapa}`);
+  linhas.push(`🔗 ${linkMapa}`);
   linhas.push('_JM Topografia e Engenharia_');
 
   return linhas.join('\n');
+}
+
+// ── Relatório de parcela SIGEF ────────────────────────────────
+export function formatarRelatorioSIGEF(params: {
+  termo: string;
+  parcela: ParcelaSIGEF | null;
+  linkMapa?: string;
+}): string {
+  const { termo, parcela, linkMapa } = params;
+  if (!parcela) {
+    return (
+      `🏛 *Busca SIGEF: ${termo}*\n\n` +
+      '❌ Não encontrado na base SIGEF do RJ.\n\n' +
+      '_Aceita: código SIGEF, código do imóvel (13 díg.) ou matrícula._\n' +
+      `🌐 Consulta oficial: ${INCRA_ACERVO}`
+    );
+  }
+  const l: string[] = [];
+  l.push(`🏛 *${parcela.nome || 'Parcela SIGEF'}*`);
+  l.push('');
+  l.push(`📐 *Área:* ${parcela.area}`);
+  l.push(`🏷️ *Status:* ✅ ${parcela.status}`);
+  if (parcela.situacao)  l.push(`📋 *Situação:* ${parcela.situacao}`);
+  if (parcela.matricula) l.push(`📜 *Matrícula:* ${parcela.matricula}`);
+  if (parcela.imovel)    l.push(`🆔 *Cód. imóvel:* ${parcela.imovel}`);
+  l.push(`🔑 *SIGEF:* ${parcela.codigo}`);
+  if (linkMapa) { l.push(''); l.push(`🔗 Ver no mapa: ${linkMapa}`); }
+  l.push('_JM Topografia e Engenharia_');
+  return l.join('\n');
+}
+
+// ── Lista de plantas PAL de um município ──────────────────────
+export function formatarPlantas(municipio: string, plantas: PlantaPAL[]): string {
+  if (plantas.length === 0) {
+    return (
+      `🗺️ *Plantas — ${municipio}*\n\n` +
+      'Nenhuma planta cadastrada para este município ainda.\n\n' +
+      `Contribua com o acervo e ganhe acesso grátis: ${MAP_BASE}`
+    );
+  }
+  const l: string[] = [];
+  l.push(`🗺️ *Plantas / PAL — ${municipio}*`);
+  l.push(`_${plantas.length} no acervo_`);
+  l.push('');
+  for (const pl of plantas.slice(0, 8)) {
+    l.push(`▸ *${pl.titulo}*`);
+    const meta = [pl.tipo, pl.bairro, pl.data].filter(Boolean).join(' · ');
+    if (meta) l.push(`   ${meta}`);
+    if (pl.url) l.push(`   📂 ${pl.url}`);
+  }
+  if (plantas.length > 8) l.push(`_(+${plantas.length - 8} — veja no mapa)_`);
+  l.push('');
+  l.push('_JM Topografia e Engenharia_');
+  return l.join('\n');
 }
 
 // ── Relatório de imóvel CAR por código ───────────────────────
@@ -166,9 +261,11 @@ export function formatarResposta(params: {
   linkPlantas: string;
 }): string {
   return formatarRelatorio({
-    ...params,
-    embargos: [],
-    linkMapa: `https://agricart-jca.github.io/jm-mapstudio?lat=${params.lat}&lon=${params.lon}`,
+    lat: params.lat, lon: params.lon,
+    imoveis: params.imoveis,
+    sigef: [], embargos: [], plantas: [],
+    temPlantas: params.temPlantas, linkPlantas: params.linkPlantas,
+    linkMapa: `${MAP_BASE}?lat=${params.lat}&lon=${params.lon}`,
     municipio: params.municipio ? { ...params.municipio, uf: 'RJ' } : null,
   });
 }

@@ -1,18 +1,40 @@
 # JM MapStudio — Integração WhatsApp (Meta Cloud API)
 
+Consulta fundiária do RJ direto no WhatsApp: **CAR · SIGEF · Plantas/PAL · Embargos IBAMA**.
+
+## O que o cliente pode fazer
+
+| Ação no WhatsApp | Resposta |
+|------------------|----------|
+| Envia **localização** 📍 | Relatório completo do ponto: município + CAR + SIGEF + plantas + embargos IBAMA + imagem do mapa |
+| `CAR RJ-3304557-XXXX...` | Dados do imóvel CAR + imagem |
+| `SIGEF 5120100113558` | Parcela SIGEF (aceita código, código do imóvel 13 díg. ou matrícula) + imagem |
+| `PLANTA Seropédica` | Lista de plantas/PAL aprovadas do município |
+| `ajuda` / `oi` / `menu` | Menu de boas-vindas com os comandos |
+
 ## Como funciona
 
 ```
-Cliente envia localização no WhatsApp
+Cliente (WhatsApp) → Meta Cloud API → POST .../whatsapp-webhook
         ↓
-Meta → POST https://...supabase.co/functions/v1/whatsapp-webhook
+  registrarMensagem()  → dedup (ignora reentregas) + log + rate limit
         ↓
-Edge Function extrai lat/lon
+  roteador de comandos:
+    location → consultarCoordenada()  → CAR + SIGEF + plantas + IBAMA
+    CAR/SIGEF/PLANTA → busca específica
         ↓
-consultarCoordenada(lat, lon)  → município + imóveis CAR
-        ↓
-sendText(from, resposta)       → resposta formatada ao cliente
+  sendImage() (mapa) + sendText() (relatório formatado)
 ```
+
+Fontes: SICAR WMS/WFS (CAR), base local `sigef_rj.geojson` (SIGEF, 13.716 parcelas RJ),
+tabela `plantas` do Supabase (PAL), WFS IBAMA (embargos). Cache em memória na Edge Function.
+
+---
+
+## PASSO 0 — Rodar a migração do banco
+
+No Supabase → SQL Editor → cole e rode **`migration-whatsapp.sql`**
+(cria a tabela `whatsapp_logs` usada para dedup, rate limit e auditoria).
 
 ---
 
@@ -39,6 +61,10 @@ Adicione:
 | `WHATSAPP_TOKEN` | Token permanente do Meta |
 | `WHATSAPP_PHONE_ID` | Phone Number ID do Meta |
 | `WHATSAPP_VERIFY_TOKEN` | Qualquer string, ex: `jm-mapstudio-2024` |
+| `WHATSAPP_APP_SECRET` | _(opcional)_ App Secret do Meta — valida a assinatura HMAC das requisições |
+| `STATIC_MAP_TEMPLATE` | _(opcional)_ URL de mapa com base (ruas/satélite) usando `{lat}` `{lon}` `{zoom}` — ex. Geoapify/MapTiler. Sem isso, usa o WMS do SICAR (parcelas em fundo branco, sem chave) |
+
+> `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` já são injetados automaticamente nas Edge Functions — usados para o log/dedup.
 
 ---
 
@@ -135,14 +161,24 @@ curl "https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/whatsapp-webhook?hub
 
 ---
 
-## Arquivos criados
+## Arquivos
 
 ```
 supabase/functions/
   _shared/
-    geo.ts              ← consulta município + CAR (server-side)
-    whatsapp.ts         ← envio de mensagens via Meta API
+    geo.ts              ← município + CAR + SIGEF + plantas + IBAMA (server-side)
+    whatsapp.ts         ← envio (texto/imagem) + formatação das respostas
   whatsapp-webhook/
-    index.ts            ← webhook principal (GET + POST)
+    index.ts            ← webhook: verify + roteador de comandos + dedup/log
+migration-whatsapp.sql  ← tabela whatsapp_logs (rodar no Supabase)
 .env.whatsapp.example   ← variáveis necessárias
 ```
+
+## Robustez incluída
+
+- **Idempotência**: `whatsapp_logs.wa_message_id` é único → reentregas do Meta são ignoradas (não responde duas vezes).
+- **Rate limit**: máx. 12 mensagens/minuto por número (anti-flood).
+- **Assinatura HMAC**: se `WHATSAPP_APP_SECRET` configurado, valida `x-hub-signature-256`.
+- **Cache**: municípios e base SIGEF ficam em memória entre invocações (resposta rápida).
+- **Degradação graciosa**: se a imagem do mapa falhar, o relatório de texto é enviado mesmo assim.
+- **Anti-injeção**: código CAR validado por regex estrita antes do CQL_FILTER do WFS.

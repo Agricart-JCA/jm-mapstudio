@@ -8,10 +8,15 @@ const MUNICIPIOS_URL =
 
 const SICAR_WFS    = 'https://geoserver.car.gov.br/geoserver/sicar/ows';
 const IBAMA_WFS    = 'https://siscom.ibama.gov.br/geoserver/geo_sas/ows';
-const MAP_BASE_URL = 'https://agricart-jca.github.io/jm-mapstudio';
+const MAP_BASE_URL = 'https://jm-saas.vercel.app';
+const SIGEF_URL    = 'https://jm-saas.vercel.app/sigef_rj.geojson';
+const SUPABASE_URL = 'https://zzjizqiafnnuqmrkhjqj.supabase.co';
+const SUPABASE_ANON =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6aml6cWlhZm5udXFtcmtoanFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2Nzk3NDMsImV4cCI6MjA5NDI1NTc0M30.D0vhrJY2qgLJdqI8T75dgPer_376ICDOlvSoQVSoovk';
 
-// Cache em memória
+// Cache em memória (persiste entre invocações na mesma instância da Edge Function)
 let _municipiosCache: GeoJSON.FeatureCollection | null = null;
+let _sigefCache: GeoJSON.FeatureCollection | null = null;
 
 // ── Tipos ──────────────────────────────────────────────────────
 export interface Municipio {
@@ -35,10 +40,32 @@ export interface EmbargoIBAMA {
   dataEmissao: string;
 }
 
+export interface ParcelaSIGEF {
+  codigo: string;      // UUID SIGEF
+  imovel: string;      // código do imóvel (13 díg.)
+  nome: string;        // nome da área
+  status: string;      // CERTIFICADA
+  situacao: string;    // REGISTRADA etc.
+  matricula: string;
+  area: string;        // calculada
+  municipio: string;   // código IBGE
+  centroide?: { lat: number; lon: number };
+}
+
+export interface PlantaPAL {
+  titulo: string;
+  tipo: string;
+  bairro: string;
+  data: string;
+  url: string;
+}
+
 export interface ConsultaResult {
   municipio: Municipio | null;
   imoveis: ImovelCAR[];
+  sigef: ParcelaSIGEF[];
   embargos: EmbargoIBAMA[];
+  plantas: PlantaPAL[];
   temPlantas: boolean;
   linkPlantas: string;
   linkMapa: string;
@@ -186,35 +213,104 @@ export async function findEmbargosIBAMA(lat: number, lon: number): Promise<Embar
   }
 }
 
-// ── Plantas cadastradas ───────────────────────────────────────
-let _plantasCache: Record<string, { url?: string }> | null = null;
-const PLANTAS_URL =
-  'https://raw.githubusercontent.com/Agricart-JCA/jm-mapstudio/main/jm-saas/plantas.json';
-
-async function getPlantas(): Promise<Record<string, { url?: string }>> {
-  if (_plantasCache) return _plantasCache;
-  try {
-    const res = await fetch(PLANTAS_URL, { signal: AbortSignal.timeout(5000) });
-    _plantasCache = res.ok ? await res.json() : {};
-  } catch { _plantasCache = {}; }
-  return _plantasCache!;
+// ── SIGEF / INCRA (base local hospedada no Vercel) ────────────
+async function getSigef(): Promise<GeoJSON.FeatureCollection> {
+  if (_sigefCache) return _sigefCache;
+  const res = await fetch(SIGEF_URL, { signal: AbortSignal.timeout(30000) });
+  if (!res.ok) throw new Error(`Erro ao carregar SIGEF: ${res.status}`);
+  _sigefCache = await res.json() as GeoJSON.FeatureCollection;
+  return _sigefCache;
 }
 
-// ── Consulta completa por coordenada ──────────────────────────
+function centroidOf(geom: GeoJSON.Geometry): { lat: number; lon: number } | undefined {
+  const bbox = bboxOfGeometry(geom);
+  return bbox ? { lat: (bbox[1] + bbox[3]) / 2, lon: (bbox[0] + bbox[2]) / 2 } : undefined;
+}
+
+function parcelaFromFeature(f: GeoJSON.Feature): ParcelaSIGEF {
+  const p = (f.properties || {}) as Record<string, unknown>;
+  const areaHa = f.geometry ? (calcAreaKm2(f.geometry) * 100) : 0; // km² → ha
+  return {
+    codigo:    String(p.codigo || p.parcela_codigo || '—'),
+    imovel:    String(p.imovel || ''),
+    nome:      String(p.nome || ''),
+    status:    String(p.status || 'CERTIFICADA'),
+    situacao:  String(p.situacao || ''),
+    matricula: String(p.matricula || ''),
+    area:      areaHa.toFixed(2) + ' ha',
+    municipio: String(p.municipio || ''),
+    centroide: f.geometry ? centroidOf(f.geometry) : undefined,
+  };
+}
+
+export async function findParcelasSIGEF(lat: number, lon: number): Promise<ParcelaSIGEF[]> {
+  try {
+    const fc = await getSigef();
+    return fc.features.filter(f => pointInFeature(lon, lat, f)).map(parcelaFromFeature);
+  } catch (e) {
+    console.error('[SIGEF] erro:', e);
+    return [];
+  }
+}
+
+// Busca por UUID SIGEF, código do imóvel (13 díg.) ou matrícula
+export async function buscarSIGEF(termo: string): Promise<ParcelaSIGEF | null> {
+  const t = termo.toUpperCase().replace(/[\s.\-]/g, '');
+  try {
+    const fc = await getSigef();
+    const f = fc.features.find(x => {
+      const p = (x.properties || {}) as Record<string, unknown>;
+      return [p.codigo, p.parcela_codigo, p.imovel, p.matricula]
+        .some(c => c && String(c).toUpperCase().replace(/[\s.\-]/g, '') === t);
+    });
+    return f ? parcelaFromFeature(f) : null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Plantas PAL (biblioteca colaborativa — tabela Supabase) ───
+export async function findPlantasMunicipio(municipio: string): Promise<PlantaPAL[]> {
+  if (!municipio) return [];
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/plantas?municipio=ilike.${encodeURIComponent(municipio)}` +
+                `&status=eq.aprovado&order=created_at.desc&limit=10` +
+                `&select=titulo,tipo,bairro,data_aproximada,pdf_url`;
+    const res = await fetch(url, {
+      headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return [];
+    const rows = await res.json() as Record<string, unknown>[];
+    return rows.map(r => ({
+      titulo: String(r.titulo || 'Planta'),
+      tipo:   String(r.tipo || 'planta'),
+      bairro: String(r.bairro || ''),
+      data:   String(r.data_aproximada || ''),
+      url:    String(r.pdf_url || ''),
+    })).filter(p => p.url);
+  } catch {
+    return [];
+  }
+}
+
+// ── Consulta completa por coordenada (CAR + SIGEF + plantas + embargos) ──
 export async function consultarCoordenada(lat: number, lon: number): Promise<ConsultaResult> {
-  const [municipio, imoveis, embargos, plantas] = await Promise.all([
-    findMunicipio(lat, lon),
+  const municipio = await findMunicipio(lat, lon);
+  const [imoveis, sigef, embargos, plantas] = await Promise.all([
     findImoveisCAR(lat, lon),
+    findParcelasSIGEF(lat, lon),
     findEmbargosIBAMA(lat, lon),
-    getPlantas(),
+    findPlantasMunicipio(municipio?.nome || ''),
   ]);
 
-  const nomeM       = municipio?.nome || '';
-  const entrada     = nomeM ? (plantas[nomeM] || null) : null;
-  const linkPlantas = entrada?.url || '';
+  const linkPlantas = plantas[0]?.url || '';
   const linkMapa    = `${MAP_BASE_URL}?lat=${lat.toFixed(6)}&lon=${lon.toFixed(6)}`;
 
-  return { municipio, imoveis, embargos, temPlantas: !!linkPlantas, linkPlantas, linkMapa };
+  return {
+    municipio, imoveis, sigef, embargos, plantas,
+    temPlantas: plantas.length > 0, linkPlantas, linkMapa,
+  };
 }
 
 // ── Busca imóvel CAR por código ───────────────────────────────
