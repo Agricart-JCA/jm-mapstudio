@@ -26,6 +26,39 @@ alter table public.whatsapp_logs enable row level security;
 -- delete from public.whatsapp_logs where created_at < now() - interval '90 days';
 
 -- ================================================================
+-- Sessões do WhatsApp: estado da conversa (menu guiado) + cota grátis
+-- ================================================================
+create table if not exists public.whatsapp_sessions (
+  phone        text        primary key,        -- número do cliente (somente dígitos)
+  estado       text        default '',          -- intenção pendente: aguard_car | aguard_sigef | aguard_municipio
+  consultas    integer     default 0,           -- nº de consultas já feitas (cota grátis)
+  assinante    boolean     default false,       -- cache: vinculado a assinante ativo
+  primeiro_em  timestamptz default now(),
+  ultimo_em    timestamptz default now()
+);
+
+create index if not exists idx_wasess_ultimo on public.whatsapp_sessions (ultimo_em desc);
+
+alter table public.whatsapp_sessions enable row level security;
+-- (sem policies; só service_role acessa)
+
+-- Incrementa consultas de forma atômica e devolve o total (para a cota grátis)
+create or replace function public.wa_inc_consulta(p_phone text)
+returns integer
+language plpgsql security definer as $$
+declare v_total integer;
+begin
+  insert into public.whatsapp_sessions (phone, consultas, ultimo_em)
+  values (p_phone, 1, now())
+  on conflict (phone) do update
+    set consultas = public.whatsapp_sessions.consultas + 1,
+        ultimo_em = now()
+  returning consultas into v_total;
+  return v_total;
+end;
+$$;
+
+-- ================================================================
 -- RESULTADO ESPERADO:
--- Tabela whatsapp_logs criada, com unique em wa_message_id (dedup).
+-- whatsapp_logs (dedup) + whatsapp_sessions (estado + cota) + wa_inc_consulta().
 -- ================================================================

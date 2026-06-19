@@ -55,6 +55,71 @@ export async function sendImage(to: string, imageUrl: string, caption = ''): Pro
   });
 }
 
+// Botões de resposta rápida (máx. 3; título até 20 chars)
+export async function sendButtons(
+  to: string, body: string, botoes: { id: string; titulo: string }[], rodape = '',
+): Promise<boolean> {
+  return postMessage({
+    messaging_product: 'whatsapp', to, type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: body.slice(0, 1024) },
+      ...(rodape ? { footer: { text: rodape.slice(0, 60) } } : {}),
+      action: { buttons: botoes.slice(0, 3).map(b => ({ type: 'reply', reply: { id: b.id, title: b.titulo.slice(0, 20) } })) },
+    },
+  });
+}
+
+// Lista de opções (até 10 linhas no total)
+export async function sendList(
+  to: string, body: string, tituloBotao: string,
+  linhas: { id: string; titulo: string; descricao?: string }[], rodape = '',
+): Promise<boolean> {
+  return postMessage({
+    messaging_product: 'whatsapp', to, type: 'interactive',
+    interactive: {
+      type: 'list',
+      body: { text: body.slice(0, 1024) },
+      ...(rodape ? { footer: { text: rodape.slice(0, 60) } } : {}),
+      action: {
+        button: tituloBotao.slice(0, 20),
+        sections: [{ title: 'Consultas', rows: linhas.slice(0, 10).map(l => ({
+          id: l.id, title: l.titulo.slice(0, 24), description: (l.descricao || '').slice(0, 72),
+        })) }],
+      },
+    },
+  });
+}
+
+// Menu principal com botões guiados
+export async function enviarMenu(to: string): Promise<boolean> {
+  return sendButtons(
+    to,
+    '👋 *JM MapStudio*\nConsulta fundiária do RJ.\n\nToque numa opção ou *envie sua localização* 📍',
+    [
+      { id: 'menu_car',     titulo: '🌱 Consultar CAR' },
+      { id: 'menu_sigef',   titulo: '🏛 Consultar SIGEF' },
+      { id: 'menu_plantas', titulo: '🗺 Plantas/PAL' },
+    ],
+    'JM Topografia e Engenharia',
+  );
+}
+
+// Mensagem de cota esgotada (paywall) com botão de assinatura
+export async function enviarPaywall(to: string, usadas: number): Promise<boolean> {
+  return sendButtons(
+    to,
+    `🔒 Você já usou suas *${usadas} consultas gratuitas*.\n\n` +
+    `Assine o *JM MapStudio* para consultas *ilimitadas* — CAR, SIGEF, plantas e mais.\n\n` +
+    `Já é assinante? Cadastre este WhatsApp no seu perfil para liberar.`,
+    [
+      { id: 'assinar',  titulo: '⭐ Assinar agora' },
+      { id: 'menu',     titulo: '↩ Voltar ao menu' },
+    ],
+    'Acesso ilimitado para assinantes',
+  );
+}
+
 export async function markRead(messageId: string): Promise<void> {
   await fetch(`${GRAPH_API}/${phoneId()}/messages`, {
     method: 'POST',

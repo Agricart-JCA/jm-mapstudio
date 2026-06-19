@@ -4,13 +4,21 @@ Consulta fundiária do RJ direto no WhatsApp: **CAR · SIGEF · Plantas/PAL · E
 
 ## O que o cliente pode fazer
 
+Ao mandar `oi`/`menu` (ou qualquer texto não reconhecido), recebe um **menu com botões**:
+[🌱 Consultar CAR] · [🏛 Consultar SIGEF] · [🗺 Plantas/PAL]. Ao tocar, o bot pede o dado
+e lembra o contexto (sessão). Também aceita comandos diretos por texto:
+
 | Ação no WhatsApp | Resposta |
 |------------------|----------|
-| Envia **localização** 📍 | Relatório completo do ponto: município + CAR + SIGEF + plantas + embargos IBAMA + imagem do mapa |
+| Toca num **botão** do menu | Bot pede o dado (código/município) e responde |
+| Envia **localização** 📍 | Relatório completo: município + CAR + SIGEF + plantas + embargos IBAMA + imagem |
 | `CAR RJ-3304557-XXXX...` | Dados do imóvel CAR + imagem |
-| `SIGEF 5120100113558` | Parcela SIGEF (aceita código, código do imóvel 13 díg. ou matrícula) + imagem |
-| `PLANTA Seropédica` | Lista de plantas/PAL aprovadas do município |
-| `ajuda` / `oi` / `menu` | Menu de boas-vindas com os comandos |
+| `SIGEF 5120100113558` | Parcela SIGEF (código, código do imóvel 13 díg. ou matrícula) + imagem |
+| `PLANTA Seropédica` | Plantas/PAL aprovadas do município |
+
+**Acesso (aberto com cota grátis):** cada número tem **5 consultas grátis** (`WHATSAPP_COTA_GRATIS`).
+Depois, o bot mostra um botão *Assinar agora*. Quem cadastrar o WhatsApp no perfil (campo telefone)
+e tiver assinatura/trial ativo consulta **ilimitado**. Saudações e menu não contam na cota.
 
 ## Como funciona
 
@@ -63,6 +71,7 @@ Adicione:
 | `WHATSAPP_VERIFY_TOKEN` | Qualquer string, ex: `jm-mapstudio-2024` |
 | `WHATSAPP_APP_SECRET` | _(opcional)_ App Secret do Meta — valida a assinatura HMAC das requisições |
 | `STATIC_MAP_TEMPLATE` | _(opcional)_ URL de mapa com base (ruas/satélite) usando `{lat}` `{lon}` `{zoom}` — ex. Geoapify/MapTiler. Sem isso, usa o WMS do SICAR (parcelas em fundo branco, sem chave) |
+| `WHATSAPP_COTA_GRATIS` | _(opcional)_ nº de consultas grátis por número antes do paywall (default 5) |
 
 > `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` já são injetados automaticamente nas Edge Functions — usados para o log/dedup.
 
@@ -167,10 +176,11 @@ curl "https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/whatsapp-webhook?hub
 supabase/functions/
   _shared/
     geo.ts              ← município + CAR + SIGEF + plantas + IBAMA (server-side)
-    whatsapp.ts         ← envio (texto/imagem) + formatação das respostas
+    whatsapp.ts         ← envio (texto/imagem/botões/lista) + formatação
+    sessao.ts           ← estado da conversa (menu guiado) + cota/assinante
   whatsapp-webhook/
-    index.ts            ← webhook: verify + roteador de comandos + dedup/log
-migration-whatsapp.sql  ← tabela whatsapp_logs (rodar no Supabase)
+    index.ts            ← webhook: verify + menu por botões + roteador + cota + dedup
+migration-whatsapp.sql  ← tabelas whatsapp_logs + whatsapp_sessions (rodar no Supabase)
 .env.whatsapp.example   ← variáveis necessárias
 ```
 
