@@ -2529,6 +2529,11 @@ function safeUrl(u) {
   const s = String(u || '').trim();
   return /^https?:\/\//i.test(s) ? s : '#'; // bloqueia javascript:, data:, etc.
 }
+// Escape para XML/KML (evita KML inválido com & < > em nomes)
+function xmlEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&apos;' }[c]));
+}
 // Iniciais seguras (evita crash quando o nome é nulo/vazio)
 function _initials(name) {
   const n = String(name || '').trim();
@@ -3841,8 +3846,8 @@ function renderLayers(){
   el.innerHTML=layerStore.map(l=>`
     <div class="layer-item">
       <div class="layer-color" style="background:${l.color}"></div>
-      <span class="layer-name" title="${l.name}">${l.name}</span>
-      <span class="layer-badge">${l.fmt}</span>
+      <span class="layer-name" title="${esc(l.name)}">${esc(l.name)}</span>
+      <span class="layer-badge">${esc(l.fmt)}</span>
       <span class="layer-count">${l.count}</span>
       <span class="layer-toggle" onclick="toggleLayer(${l.id})">${l.visible?'👁':'🚫'}</span>
       <span class="layer-delete" onclick="deleteLayer(${l.id})">✕</span>
@@ -3954,8 +3959,8 @@ function renderDrawnList(){
     <div class="drawn-item${d.visible?'':' hidden-feat'}" onclick="zoomToDrawn(${d.id})">
       <span class="di-dot" style="background:${d.color||'#c0392b'}"></span>
       <div class="di-body">
-        <span class="di-name" title="${d.name}">${d.name}</span>
-        ${d.comment?`<span class="di-comment" title="${d.comment}">${d.comment}</span>`:''}
+        <span class="di-name" title="${esc(d.name)}">${esc(d.name)}</span>
+        ${d.comment?`<span class="di-comment" title="${esc(d.comment)}">${esc(d.comment)}</span>`:''}
       </div>
       <span class="di-info">${d.meas}</span>
       <span class="di-eye"  title="${d.visible?'Ocultar':'Mostrar'}" onclick="event.stopPropagation();toggleDrawn(${d.id})">${d.visible?'👁':'🚫'}</span>
@@ -4104,7 +4109,7 @@ function exportAllDrawn(fmt){
       if(l instanceof L.Marker){ const ll=l.getLatLng(); geom=`<Point><coordinates>${ll.lng},${ll.lat},0</coordinates></Point>`; }
       else if(l instanceof L.Polygon){ const ring=l.getLatLngs()[0]; const c=[...ring,ring[0]].map(ll=>`${ll.lng},${ll.lat},0`).join(' '); geom=`<Polygon><outerBoundaryIs><LinearRing><coordinates>${c}</coordinates></LinearRing></outerBoundaryIs></Polygon>`; }
       else if(l instanceof L.Polyline){ const c=l.getLatLngs().map(ll=>`${ll.lng},${ll.lat},0`).join(' '); geom=`<LineString><coordinates>${c}</coordinates></LineString>`; }
-      return `<Placemark><name>${d.name}</name><description>${d.comment||''}</description>${geom}</Placemark>`;
+      return `<Placemark><name>${xmlEsc(d.name)}</name><description>${xmlEsc(d.comment||'')}</description>${geom}</Placemark>`;
     }).join('\n    ');
     downloadFile(`<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n    <name>JM MapStudio – Desenhos</name>\n    ${marks}\n  </Document>\n</kml>`,'jm-desenhos.kml','application/vnd.google-earth.kml+xml');
     toast('KML exportado','ok');
