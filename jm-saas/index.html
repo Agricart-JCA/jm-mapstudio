@@ -3867,7 +3867,7 @@ function commitLayer(name,fmt,group,count,color){
 // INFO PANEL
 // ══════════════════════════════════════════════
 function showInfo(fields){
-  document.getElementById('info-content').innerHTML=fields.map(([k,v])=>`<div class="info-row"><span class="info-label">${k}</span><span class="info-value">${v}</span></div>`).join('');
+  document.getElementById('info-content').innerHTML=fields.map(([k,v])=>`<div class="info-row"><span class="info-label">${esc(k)}</span><span class="info-value">${esc(v)}</span></div>`).join('');
 }
 
 // ══════════════════════════════════════════════
@@ -5305,7 +5305,7 @@ async function consultarCAR(lat, lon) {
   } catch(err) {
     loading.style.display = 'none';
     empty.style.display   = 'block';
-    empty.innerHTML = `<div style="color:var(--sub)">⚠ SICAR/${uf}: ${err.message||'tente novamente'}</div>`;
+    empty.innerHTML = `<div style="color:var(--sub)">⚠ SICAR/${esc(uf)}: ${esc(err.message||'tente novamente')}</div>`;
     console.error('[CAR]', err);
   }
 }
@@ -6184,7 +6184,8 @@ async function reurbInit() {
     const sess = getSession();
     if (sess?.access_token) {
       try {
-        const r = await fetch(`${SUPABASE_REST}/profiles?id=eq.${sess.user?.id}&select=role`, {
+        // RLS já retorna só o próprio perfil — não precisa filtrar por id
+        const r = await fetch(`${SUPABASE_REST}/profiles?select=role&limit=1`, {
           headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + sess.access_token }
         });
         const d = r.ok ? await r.json() : [];
@@ -6555,7 +6556,7 @@ function rimp_buildPreview(features) {
 
   ['rimp-field-lote','rimp-field-quadra','rimp-field-area','rimp-field-prop','rimp-field-drive'].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
-    el.innerHTML = propList.map(p => `<option value="${p}">${p}</option>`).join('');
+    el.innerHTML = propList.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
   });
 
   const trySet = (id, cands) => {
