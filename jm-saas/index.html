@@ -4462,29 +4462,52 @@ async function _satImageWithPolygon(latlngs, m) {
   await Promise.all(jobs);
 
   const toPx=(la,lo)=>[ lonX(lo,zoom)-tMinX*256, latY(la,zoom)-tMinY*256 ];
+  const pxs=latlngs.map(([la,lo])=>toPx(la,lo));
+  const pminx=Math.min(...pxs.map(p=>p[0])), pmaxx=Math.max(...pxs.map(p=>p[0]));
+  const pminy=Math.min(...pxs.map(p=>p[1])), pmaxy=Math.max(...pxs.map(p=>p[1]));
+  const cxp=(pminx+pmaxx)/2, cyp=(pminy+pmaxy)/2;              // centro do polígono
+  const polyPx=Math.min(pmaxx-pminx, pmaxy-pminy);
+  const fs=Math.max(11, Math.min(34, Math.round(polyPx/20))); // fonte proporcional ao lote
+  const lw=Math.max(2, fs*0.22), mr=Math.max(4, fs*0.42), sw=Math.max(3, fs*0.30);
+
   // Polígono
   ctx.beginPath();
-  latlngs.forEach(([la,lo],i)=>{ const [x,y]=toPx(la,lo); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  pxs.forEach(([x,y],i)=>{ i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
   ctx.closePath();
-  ctx.lineWidth=4; ctx.strokeStyle='#f1c40f'; ctx.stroke();
+  ctx.lineWidth=lw; ctx.strokeStyle='#f1c40f'; ctx.stroke();
   ctx.fillStyle='rgba(241,196,15,0.10)'; ctx.fill();
-  // Cotas (distância de cada lado)
-  ctx.font='bold 18px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  for(let i=0;i<latlngs.length;i++){
-    const A=toPx(latlngs[i][0],latlngs[i][1]), B=toPx(latlngs[(i+1)%latlngs.length][0],latlngs[(i+1)%latlngs.length][1]);
+
+  // Cotas — fora do polígono, ao longo de cada lado
+  ctx.font='bold '+fs+'px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let i=0;i<pxs.length;i++){
+    const A=pxs[i], B=pxs[(i+1)%pxs.length];
     let ang=Math.atan2(B[1]-A[1],B[0]-A[0]); if(ang>Math.PI/2)ang-=Math.PI; if(ang<-Math.PI/2)ang+=Math.PI;
-    const txt=_fmtNum((m.V[i]&&m.V[i].dist)||0,2)+' m';
-    ctx.save(); ctx.translate((A[0]+B[0])/2,(A[1]+B[1])/2); ctx.rotate(ang);
-    ctx.lineWidth=4; ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(txt,0,-10);
-    ctx.fillStyle='#fff'; ctx.fillText(txt,0,-10); ctx.restore();
+    const midx=(A[0]+B[0])/2, midy=(A[1]+B[1])/2;
+    let nx=-(B[1]-A[1]), ny=(B[0]-A[0]); const nl=Math.hypot(nx,ny)||1; nx/=nl; ny/=nl;
+    if((midx-cxp)*nx+(midy-cyp)*ny < 0){ nx=-nx; ny=-ny; }     // aponta p/ fora
+    const off=fs*0.95, txt=_fmtNum((m.V[i]&&m.V[i].dist)||0,2)+' m';
+    ctx.save(); ctx.translate(midx+nx*off, midy+ny*off); ctx.rotate(ang);
+    ctx.lineWidth=sw; ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(txt,0,0);
+    ctx.fillStyle='#fff'; ctx.fillText(txt,0,0); ctx.restore();
   }
-  // Vértices + rótulos
-  latlngs.forEach(([la,lo],i)=>{ const [x,y]=toPx(la,lo);
-    ctx.beginPath(); ctx.arc(x,y,6,0,2*Math.PI); ctx.fillStyle='#e74c3c'; ctx.fill(); ctx.lineWidth=2.5; ctx.strokeStyle='#fff'; ctx.stroke();
-    const lbl='V'+(i+1);
-    ctx.lineWidth=4; ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(lbl,x,y-16); ctx.fillStyle='#fff'; ctx.fillText(lbl,x,y-16);
+
+  // Vértices + rótulos (rótulo p/ fora)
+  pxs.forEach(([x,y],i)=>{
+    ctx.beginPath(); ctx.arc(x,y,mr,0,2*Math.PI); ctx.fillStyle='#e74c3c'; ctx.fill(); ctx.lineWidth=Math.max(2,fs*0.15); ctx.strokeStyle='#fff'; ctx.stroke();
+    let vx=x-cxp, vy=y-cyp; const vl=Math.hypot(vx,vy)||1; vx/=vl; vy/=vl;
+    const lx=x+vx*fs*1.1, ly=y+vy*fs*1.1, lbl='V'+(i+1);
+    ctx.lineWidth=sw; ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(lbl,lx,ly);
+    ctx.fillStyle='#fff'; ctx.fillText(lbl,lx,ly);
   });
-  return { dataURL: cv.toDataURL('image/jpeg',0.85), ratio: cw/ch };
+
+  // Dimensões reais do recorte (m) para escalar no PDF
+  const t2lon=x=>x/Math.pow(2,zoom)*360-180;
+  const t2lat=y=>Math.atan(Math.sinh(Math.PI*(1-2*y/Math.pow(2,zoom))))*180/Math.PI;
+  const cWest=t2lon(tMinX), cEast=t2lon(tMaxX+1), cNorth=t2lat(tMinY), cSouth=t2lat(tMaxY+1);
+  const midLat=(cNorth+cSouth)/2;
+  const groundW=(cEast-cWest)*111320*Math.cos(midLat*Math.PI/180);
+  const groundH=(cNorth-cSouth)*110540;
+  return { dataURL: cv.toDataURL('image/jpeg',0.85), ratio: cw/ch, groundW, groundH };
 }
 
 // PLANTA COM RECORTE DE SATÉLITE — A3 retrato
@@ -4498,9 +4521,14 @@ function _pdfPlantaSatelite(doc, m, d, sat, selo) {
 
   const box={ x:mx, y:40, w:W-2*mx, h:286 };
   doc.setDrawColor(120); doc.setLineWidth(0.3); doc.rect(box.x, box.y, box.w, box.h);
+  let kSat=0;
   if (sat && sat.dataURL) {
-    // encaixa a imagem preservando proporção
-    let iw=box.w, ih=iw/sat.ratio; if(ih>box.h){ ih=box.h; iw=ih*sat.ratio; }
+    // Escala usual: dimensiona a imagem pelo tamanho real (metros) do recorte
+    const gW=sat.groundW||1, gH=sat.groundH||1;
+    const fitK=Math.min((box.w-6)/gW, (box.h-6)/gH);   // mm/m que caberia
+    const denom=_snapEscala(1000/fitK); kSat=1000/denom;
+    d.escala='1:'+denom.toLocaleString('pt-BR');
+    let iw=gW*kSat, ih=gH*kSat;
     const ix=box.x+(box.w-iw)/2, iy=box.y+(box.h-ih)/2;
     try { doc.addImage(sat.dataURL,'JPEG',ix,iy,iw,ih); } catch(e){}
   } else {
@@ -4512,6 +4540,13 @@ function _pdfPlantaSatelite(doc, m, d, sat, selo) {
   doc.triangle(nx,ny-7, nx-3,ny+2.5, nx+3,ny+2.5, 'F');
   doc.setTextColor(255); doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.text('N', nx, ny+9, {align:'center'});
 
+  // Escala numérica + gráfica (dentro da imagem, canto inferior esquerdo)
+  if (kSat>0){
+    doc.setFillColor(255); doc.rect(box.x+2, box.y+box.h-13, 52, 11, 'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(20);
+    doc.text(`Escala ${d.escala}`, box.x+4, box.y+box.h-8);
+    _escalaGrafica(doc, box.x+4, box.y+box.h-5, kSat);
+  }
   doc.setFontSize(10); doc.setTextColor(30);
   doc.text(`Área: ${_fmtNum(m.area)} m² (${_fmtNum(m.area/10000,4)} ha)   ·   Perímetro: ${_fmtNum(m.perim)} m`, W/2, box.y+box.h+7, {align:'center'});
   doc.setFontSize(8); doc.setTextColor(90);
@@ -4662,6 +4697,24 @@ function _pdfCarimbo(doc, x, y, w, m, d) {
   ].forEach(t => { doc.text(t, rx, ry); ry += 5.2; });
 }
 
+// Escalas usuais de plantas topográficas
+const ESCALAS = [50,75,100,125,150,200,250,300,400,500,750,1000,1250,1500,2000,2500,3000,4000,5000,7500,10000,15000,20000,25000,50000];
+function _snapEscala(fitDenom){ for(const e of ESCALAS){ if(e>=fitDenom) return e; } return Math.ceil(fitDenom/5000)*5000; }
+
+// Barra de escala gráfica. k = mm de papel por metro. Retorna o comprimento (mm) desenhado.
+function _escalaGrafica(doc, x, y, k){
+  let Lm = 45 / k;                         // metros que dão ~45 mm no papel
+  const p = Math.pow(10, Math.floor(Math.log10(Lm)));
+  const f = Lm/p; Lm = (f>=5?5:f>=2?2:1)*p; // arredonda p/ 1/2/5 ×10ⁿ
+  const seg=4, segM=Lm/seg, segMm=segM*k, barMm=Lm*k, h=2;
+  doc.setDrawColor(30); doc.setLineWidth(0.25);
+  for(let i=0;i<seg;i++){ doc.setFillColor(i%2?255:40); doc.rect(x+i*segMm, y, segMm, h, 'FD'); }
+  doc.setFont('helvetica','normal'); doc.setFontSize(6); doc.setTextColor(40);
+  for(let i=0;i<=seg;i++){ doc.text(String(Math.round(i*segM)), x+i*segMm, y-1, {align:'center'}); }
+  doc.text('m', x+barMm+2.5, y+h);
+  return barMm;
+}
+
 function _pdfPlanta(doc, m, d, selo) {
   const W=297, H=420, mx=15;           // A3 retrato
   // Moldura da prancha
@@ -4680,8 +4733,11 @@ function _pdfPlanta(doc, m, d, selo) {
   const Es=m.V.map(v=>v.E), Ns=m.V.map(v=>v.N);
   const minE=Math.min(...Es), maxE=Math.max(...Es), minN=Math.min(...Ns), maxN=Math.max(...Ns);
   const dataW=Math.max(maxE-minE,1e-6), dataH=Math.max(maxN-minN,1e-6);
-  const pad=18;
-  const k=Math.min((box.w-2*pad)/dataW,(box.h-2*pad)/dataH); // mm por metro
+  const pad=20;
+  const fitK=Math.min((box.w-2*pad)/dataW,(box.h-2*pad)/dataH); // mm por metro que caberia
+  const denom=_snapEscala(1000/fitK);                            // escala usual (arredonda p/ cima)
+  const k=1000/denom;                                           // mm de papel por metro (real)
+  d.escala='1:'+denom.toLocaleString('pt-BR');
   const offX=box.x+(box.w-dataW*k)/2, offY=box.y+(box.h-dataH*k)/2;
   const X=E=>offX+(E-minE)*k, Y=N=>offY+(maxN-N)*k;
 
@@ -4714,11 +4770,11 @@ function _pdfPlanta(doc, m, d, selo) {
   doc.triangle(nx,ny-7, nx-3,ny+2.5, nx+3,ny+2.5, 'F');
   doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(30); doc.text('N', nx, ny+9, {align:'center'});
 
-  // Escala numérica
-  const denom = Math.max(1, Math.round(1000/k));
-  d.escala = '1:'+denom.toLocaleString('pt-BR');
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(70);
-  doc.text(`Escala aprox. ${d.escala}`, box.x+3, box.y+box.h-3);
+  // Escala numérica + gráfica
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(30);
+  doc.text(`Escala ${d.escala}`, box.x+3, box.y+box.h-9);
+  _escalaGrafica(doc, box.x+3, box.y+box.h-6, k);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(70);
   doc.text(`SIRGAS 2000 / UTM ${m.zone}S`, box.x+box.w-3, box.y+box.h-3, {align:'right'});
 
   // Resumo
