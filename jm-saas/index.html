@@ -943,6 +943,10 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 .fund-polygon         { transition: fill-opacity .15s, stroke-width .15s; }
 .fund-polygon:hover   { cursor: pointer; }
 
+/* ═══ RÓTULOS DE COORDENADAS ═══ */
+.coord-lbl { background:rgba(26,26,26,.82) !important; color:#fff !important; border:1px solid var(--red2) !important; border-radius:4px !important; font-size:10px !important; font-weight:700 !important; padding:1px 5px !important; box-shadow:none !important; }
+.coord-lbl::before { display:none !important; }
+
 /* ═══ SPINNER ═══ */
 .fund-spinner {
   width:28px; height:28px; border-radius:50%;
@@ -1551,6 +1555,9 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     <p>KML · KMZ · SHP (ZIP) · DXF · GeoJSON<br>Clique ou arraste para cá</p>
     <input type="file" id="file-input" accept=".kml,.kmz,.shp,.dbf,.prj,.dxf,.geojson,.json,.zip" multiple>
   </div>
+  <div style="padding:0 12px 4px">
+    <button onclick="abrirCoordModal()" class="draw-btn" style="width:100%;padding:9px 5px;font-size:11px">📋 Colar coordenadas (Geo / UTM)</button>
+  </div>
 
   <!-- ── DRAW SECTION ── -->
   <div id="draw-section">
@@ -1623,6 +1630,72 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
           <div id="mem-msg" style="font-size:11px;color:var(--sub);min-height:16px;text-align:center"></div>
           <button class="btn-techno" id="mem-gerar" onclick="gerarMemorialPDF()" style="width:100%;padding:12px;font-size:13px">📄 Gerar PDFs (Planta A3 + Memorial A4)</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MODAL: IMPORTAR COORDENADAS ── -->
+  <div id="coord-overlay" style="display:none;position:fixed;inset:0;z-index:6000;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:16px">
+    <div style="background:var(--panel);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:460px;max-height:92vh;overflow-y:auto;box-shadow:0 30px 90px rgba(0,0,0,.7)">
+      <div style="padding:16px 18px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:14px;font-weight:800;color:var(--text)">📋 Importar coordenadas</div>
+          <div style="font-size:11px;color:var(--sub);margin-top:2px">Cole a lista e plote os pontos no mapa</div>
+        </div>
+        <button onclick="fecharCoordModal()" style="background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:16px 18px;display:flex;flex-direction:column;gap:11px">
+        <div>
+          <label class="ep-label">Formato das coordenadas</label>
+          <select id="coord-formato" onchange="_coordFmtChange()" style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;font-family:var(--font);outline:none">
+            <option value="geo">Geográfica — decimal (lat, lon)</option>
+            <option value="gms">Geográfica — GMS (22°45'20"S ...)</option>
+            <option value="utm">UTM (E, N)</option>
+          </select>
+        </div>
+        <div id="coord-utm-opts" style="display:none;gap:8px">
+          <div style="display:flex;gap:8px">
+            <div style="flex:1">
+              <label class="ep-label">Fuso (zona)</label>
+              <input id="coord-zona" type="number" value="23" min="18" max="25" style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;font-family:var(--font);outline:none;box-sizing:border-box">
+            </div>
+            <div style="flex:1">
+              <label class="ep-label">Hemisfério</label>
+              <select id="coord-hemis" style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;font-family:var(--font);outline:none">
+                <option value="S" selected>Sul (S)</option>
+                <option value="N">Norte (N)</option>
+              </select>
+            </div>
+            <div style="flex:1.3">
+              <label class="ep-label">Datum</label>
+              <select id="coord-datum" style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;font-family:var(--font);outline:none">
+                <option value="GRS80" selected>SIRGAS 2000</option>
+                <option value="WGS84">WGS 84</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="coord-geo-opts">
+          <label class="ep-label">Ordem</label>
+          <select id="coord-ordem" style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;font-family:var(--font);outline:none">
+            <option value="latlon" selected>Latitude, Longitude</option>
+            <option value="lonlat">Longitude, Latitude</option>
+          </select>
+        </div>
+        <div>
+          <label class="ep-label">Cole as coordenadas (uma por linha)</label>
+          <textarea id="coord-texto" rows="7" placeholder="Uma linha por ponto. Aceita vírgula, espaço, tab ou ponto-e-vírgula.&#10;Opcional: rótulo no início.&#10;&#10;Ex. decimal:  P1 -22.758 -43.695&#10;Ex. UTM:      V1 683450.20 7481230.55" style="width:100%;padding:10px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;font-family:var(--mono);outline:none;box-sizing:border-box;resize:vertical;line-height:1.5"></textarea>
+        </div>
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer">
+            <input type="checkbox" id="coord-conectar" checked style="accent-color:var(--red)"> Conectar os pontos
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer">
+            <input type="checkbox" id="coord-poligono" checked style="accent-color:var(--red)"> Fechar como polígono
+          </label>
+        </div>
+        <div id="coord-msg" style="font-size:11px;color:var(--sub);min-height:16px;text-align:center;line-height:1.5"></div>
+        <button class="btn-techno" id="coord-plotar" onclick="plotarCoordenadas()" style="width:100%;padding:12px;font-size:13px">📍 Plotar no mapa</button>
       </div>
     </div>
   </div>
@@ -4678,6 +4751,135 @@ async function processZIP(buf,name,color){
   try{ const gj=await shp(buf); const data=Array.isArray(gj)?{type:'FeatureCollection',features:gj.flatMap(g=>g.features||[])}:gj; const r=renderGeoJSON(data,name,color); if(r.count){commitLayer(name,'SHP',r.group,r.count,color);return;} }catch{}
   try{ const zip=await JSZip.loadAsync(buf); const kmlF=Object.values(zip.files).find(f=>f.name.toLowerCase().endsWith('.kml')); if(kmlF){await processKML(await kmlF.async('text'),name,color);return;} }catch{}
   toast(`${name}: formato não reconhecido`);
+}
+
+// ══════════════════════════════════════════════
+// IMPORTAR COORDENADAS (Geográfica / UTM) → pontos no mapa
+// ══════════════════════════════════════════════
+function abrirCoordModal(){
+  document.getElementById('coord-msg').textContent='';
+  document.getElementById('coord-overlay').style.display='flex';
+  _coordFmtChange();
+  setTimeout(()=>document.getElementById('coord-texto')?.focus(),120);
+}
+function fecharCoordModal(){ document.getElementById('coord-overlay').style.display='none'; }
+function _coordFmtChange(){
+  const f=document.getElementById('coord-formato').value;
+  document.getElementById('coord-utm-opts').style.display = f==='utm' ? 'flex' : 'none';
+  document.getElementById('coord-geo-opts').style.display = f==='geo' ? 'block' : 'none';
+}
+
+// Define/registra a projeção UTM (SIRGAS 2000 = GRS80)
+function _projUTM(zone, hemis, datum){
+  const ell = datum==='WGS84' ? 'WGS84' : 'GRS80';
+  const name = `UTMTMP_${zone}${hemis}_${ell}`;
+  if(!proj4.defs(name)) proj4.defs(name, `+proj=utm +zone=${zone} ${hemis==='S'?'+south':''} +ellps=${ell} +towgs84=0,0,0 +units=m +no_defs`);
+  return name;
+}
+
+// Parseia um par em Graus/Min/Seg (exige hemisfério N/S/E/W)
+function _parseDMSpair(line){
+  const re = /(\d+(?:\.\d+)?)\s*[°ºd:\s]\s*(\d+(?:\.\d+)?)\s*['´′m:\s]\s*(\d+(?:\.\d+)?)?\s*["”″s'']*\s*([NSEWnsew])/gi;
+  const found=[]; let mm;
+  while((mm=re.exec(line))!==null){
+    let val=(+mm[1])+(+mm[2])/60+((+mm[3])||0)/3600;
+    const h=mm[4].toUpperCase(); if(h==='S'||h==='W') val=-val;
+    found.push({val,h});
+  }
+  if(found.length<2) return null;
+  const la=found.find(f=>f.h==='N'||f.h==='S'), lo=found.find(f=>f.h==='E'||f.h==='W');
+  return (la&&lo) ? {lat:la.val, lon:lo.val} : {lat:found[0].val, lon:found[1].val};
+}
+
+function _parseCoordTexto(texto, fmt, opts){
+  const pontos=[], erros=[];
+  const linhas = texto.split(/\r?\n/).map(l=>l.trim()).filter(l=>l && !l.startsWith('#') && !l.startsWith('//'));
+  linhas.forEach((linha, idx)=>{
+    try{
+      if(fmt==='gms'){
+        const r=_parseDMSpair(linha);
+        if(!r){ erros.push(idx+1); return; }
+        const lm=linha.match(/^([A-Za-z][\w-]*)\s/);
+        pontos.push({label: lm?lm[1]:'', lat:r.lat, lon:r.lon});
+        return;
+      }
+      // Trata vírgula decimal (ex.: -22,758) sem confundir com separador
+      let s=linha;
+      if(/\d,\d/.test(s)) s=s.replace(/(\d),(\d)/g,'$1.$2');
+      const toks=s.split(/[;\t,\s]+/).filter(Boolean);
+      const nums=[]; let label='';
+      toks.forEach(t=>{ const n=parseFloat(t); if(!isNaN(n)&&/^-?[\d.]+$/.test(t)) nums.push(n); else if(!label) label=t; });
+      if(nums.length<2){ erros.push(idx+1); return; }
+      if(fmt==='utm'){
+        let a=nums[0], b=nums[1], E, N;
+        if(Math.abs(a)>Math.abs(b)){ N=a; E=b; } else { E=a; N=b; }
+        const name=_projUTM(opts.zona, opts.hemis, opts.datum);
+        const [lon,lat]=proj4(name,'EPSG:4326',[E,N]);
+        if(isNaN(lat)||isNaN(lon)) { erros.push(idx+1); return; }
+        pontos.push({label, lat, lon});
+      } else {
+        let lat,lon;
+        if(opts.ordem==='lonlat'){ lon=nums[0]; lat=nums[1]; } else { lat=nums[0]; lon=nums[1]; }
+        const inBR=(la,lo)=>la>=-34&&la<=6&&lo>=-74&&lo<=-33;
+        // corrige ordem trocada: lat inválida OU (fora do Brasil mas invertido cai dentro)
+        if(Math.abs(lat)>90 || (!inBR(lat,lon) && inBR(lon,lat))){ const t=lat; lat=lon; lon=t; }
+        pontos.push({label, lat, lon});
+      }
+    }catch(e){ erros.push(idx+1); }
+  });
+  return {pontos, erros};
+}
+
+// Adiciona um layer (polígono/linha) ao acervo de feições desenhadas (exportável + memorial)
+function _addToDrawn(layer, name, type){
+  drawnItems.addLayer(layer);
+  if(layer.setStyle) layer.setStyle({color:'#c0392b',fillColor:'#c0392b',fillOpacity:.18,weight:2.5});
+  const entry={id:Date.now()+Math.floor(Math.random()*1000), name, comment:'', color:'#c0392b', type, meas:getLayerMeasurement(layer), layer, visible:true};
+  bindDrawnEvents(layer, entry);
+  drawnStore.push(entry);
+  renderDrawnList();
+}
+
+function plotarCoordenadas(){
+  const fmt=document.getElementById('coord-formato').value;
+  const texto=document.getElementById('coord-texto').value||'';
+  const msg=document.getElementById('coord-msg');
+  const opts={
+    ordem: document.getElementById('coord-ordem').value,
+    zona:  parseInt(document.getElementById('coord-zona').value||'23'),
+    hemis: document.getElementById('coord-hemis').value,
+    datum: document.getElementById('coord-datum').value,
+  };
+  const { pontos, erros } = _parseCoordTexto(texto, fmt, opts);
+  if(!pontos.length){ msg.style.color='var(--red2)'; msg.textContent='Nenhuma coordenada válida reconhecida. Confira o formato.'; return; }
+
+  // Aviso se cair fora do Brasil (provável formato/ordem errada)
+  const fora = pontos.filter(p=>!(p.lat>=-34&&p.lat<=6&&p.lon>=-74&&p.lon<=-33)).length;
+
+  const color=nextColor();
+  const grp=L.layerGroup();
+  pontos.forEach((p,i)=>{
+    const label=p.label || ('P'+(i+1));
+    const cm=L.circleMarker([p.lat,p.lon],{radius:5,color,fillColor:color,fillOpacity:.9,weight:2});
+    cm.bindTooltip(label,{permanent:true,direction:'right',offset:[6,0],className:'coord-lbl'});
+    cm.bindPopup(`<b>${esc(label)}</b><br>${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`);
+    cm.addTo(grp);
+  });
+
+  const latlngs=pontos.map(p=>[p.lat,p.lon]);
+  const conectar=document.getElementById('coord-conectar').checked;
+  const poligono=document.getElementById('coord-poligono').checked;
+  if(poligono && latlngs.length>=3){ _addToDrawn(L.polygon(latlngs), 'Área (coordenadas)', 'Polígono'); }
+  else if(conectar && latlngs.length>=2){ _addToDrawn(L.polyline(latlngs), 'Linha (coordenadas)', 'Linha'); }
+
+  commitLayer(`Coordenadas (${pontos.length} pts)`, 'PTS', grp, pontos.length, color);
+
+  msg.style.color = fora ? 'var(--amber)' : 'var(--green)';
+  msg.textContent = `✅ ${pontos.length} ponto(s) plotado(s)` +
+    (erros.length ? ` · ${erros.length} linha(s) ignorada(s)` : '') +
+    (fora ? ` · ⚠ ${fora} fora do Brasil (confira ordem/fuso)` : '');
+  toast(`${pontos.length} pontos plotados`, fora?'warn':'ok');
+  if(!fora && !erros.length) setTimeout(fecharCoordModal, 1400);
 }
 
 async function handleFiles(fileList){
