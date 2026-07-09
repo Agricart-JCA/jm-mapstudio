@@ -1626,9 +1626,9 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
               <input id="mem-registro" placeholder="Opcional" style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;font-family:var(--font);outline:none;box-sizing:border-box">
             </div>
           </div>
-          <div style="font-size:10px;color:var(--dim);text-align:center;line-height:1.5">Exporta 2 arquivos: <b>Planta (A3)</b> + <b>Memorial (A4)</b>. O carimbo sai em branco se você não preencher.</div>
+          <div style="font-size:10px;color:var(--dim);text-align:center;line-height:1.6">Gera um <b>.ZIP</b> com: Memorial Descritivo (A4) · Relatório Técnico (A4) · Planta (A3) · Planta com Satélite (A3, com cotas). Carimbo em branco se não preencher.</div>
           <div id="mem-msg" style="font-size:11px;color:var(--sub);min-height:16px;text-align:center"></div>
-          <button class="btn-techno" id="mem-gerar" onclick="gerarMemorialPDF()" style="width:100%;padding:12px;font-size:13px">📄 Gerar PDFs (Planta A3 + Memorial A4)</button>
+          <button class="btn-techno" id="mem-gerar" onclick="gerarMemorialPDF()" style="width:100%;padding:12px;font-size:13px">📦 Gerar entregáveis (ZIP)</button>
         </div>
       </div>
     </div>
@@ -4434,6 +4434,139 @@ async function _tileMapDataURL(lat, lon, zoom, across) {
   return cv.toDataURL('image/png');
 }
 
+// ── Recorte de satélite (Esri) com o polígono desenhado por cima ──
+async function _satImageWithPolygon(latlngs, m) {
+  let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+  latlngs.forEach(([la,lo])=>{ minLat=Math.min(minLat,la);maxLat=Math.max(maxLat,la);minLon=Math.min(minLon,lo);maxLon=Math.max(maxLon,lo); });
+  const dLat=(maxLat-minLat)||0.0006, dLon=(maxLon-minLon)||0.0006;
+  minLat-=dLat*0.25; maxLat+=dLat*0.25; minLon-=dLon*0.25; maxLon+=dLon*0.25;
+
+  const wp=z=>256*Math.pow(2,z);
+  const lonX=(lo,z)=>(lo+180)/360*wp(z);
+  const latY=(la,z)=>{ const s=Math.sin(la*Math.PI/180); return (0.5-Math.log((1+s)/(1-s))/(4*Math.PI))*wp(z); };
+  let zoom=19;
+  for(let z=19;z>=12;z--){ if((lonX(maxLon,z)-lonX(minLon,z))<=1500 && (latY(minLat,z)-latY(maxLat,z))<=1500){ zoom=z; break; } }
+
+  const tMinX=Math.floor(lonX(minLon,zoom)/256), tMaxX=Math.floor(lonX(maxLon,zoom)/256);
+  const tMinY=Math.floor(latY(maxLat,zoom)/256), tMaxY=Math.floor(latY(minLat,zoom)/256);
+  const cw=(tMaxX-tMinX+1)*256, ch=(tMaxY-tMinY+1)*256;
+  const cv=document.createElement('canvas'); cv.width=cw; cv.height=ch; const ctx=cv.getContext('2d');
+  ctx.fillStyle='#333'; ctx.fillRect(0,0,cw,ch);
+  const jobs=[];
+  for(let tx=tMinX;tx<=tMaxX;tx++)for(let ty=tMinY;ty<=tMaxY;ty++){
+    const px=(tx-tMinX)*256, py=(ty-tMinY)*256;
+    jobs.push(new Promise(res=>{ const img=new Image(); img.crossOrigin='anonymous';
+      img.onload=()=>{try{ctx.drawImage(img,px,py);}catch(e){}res();}; img.onerror=()=>res();
+      img.src=`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${ty}/${tx}`; }));
+  }
+  await Promise.all(jobs);
+
+  const toPx=(la,lo)=>[ lonX(lo,zoom)-tMinX*256, latY(la,zoom)-tMinY*256 ];
+  // Polígono
+  ctx.beginPath();
+  latlngs.forEach(([la,lo],i)=>{ const [x,y]=toPx(la,lo); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  ctx.closePath();
+  ctx.lineWidth=4; ctx.strokeStyle='#f1c40f'; ctx.stroke();
+  ctx.fillStyle='rgba(241,196,15,0.10)'; ctx.fill();
+  // Cotas (distância de cada lado)
+  ctx.font='bold 18px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let i=0;i<latlngs.length;i++){
+    const A=toPx(latlngs[i][0],latlngs[i][1]), B=toPx(latlngs[(i+1)%latlngs.length][0],latlngs[(i+1)%latlngs.length][1]);
+    let ang=Math.atan2(B[1]-A[1],B[0]-A[0]); if(ang>Math.PI/2)ang-=Math.PI; if(ang<-Math.PI/2)ang+=Math.PI;
+    const txt=_fmtNum((m.V[i]&&m.V[i].dist)||0,2)+' m';
+    ctx.save(); ctx.translate((A[0]+B[0])/2,(A[1]+B[1])/2); ctx.rotate(ang);
+    ctx.lineWidth=4; ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(txt,0,-10);
+    ctx.fillStyle='#fff'; ctx.fillText(txt,0,-10); ctx.restore();
+  }
+  // Vértices + rótulos
+  latlngs.forEach(([la,lo],i)=>{ const [x,y]=toPx(la,lo);
+    ctx.beginPath(); ctx.arc(x,y,6,0,2*Math.PI); ctx.fillStyle='#e74c3c'; ctx.fill(); ctx.lineWidth=2.5; ctx.strokeStyle='#fff'; ctx.stroke();
+    const lbl='V'+(i+1);
+    ctx.lineWidth=4; ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(lbl,x,y-16); ctx.fillStyle='#fff'; ctx.fillText(lbl,x,y-16);
+  });
+  return { dataURL: cv.toDataURL('image/jpeg',0.85), ratio: cw/ch };
+}
+
+// PLANTA COM RECORTE DE SATÉLITE — A3 retrato
+function _pdfPlantaSatelite(doc, m, d, sat, selo) {
+  const W=297, mx=15;
+  doc.setDrawColor(60); doc.setLineWidth(0.5); doc.rect(8, 8, W-16, 420-16);
+  doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(20);
+  doc.text('PLANTA GEORREFERENCIADA', W/2, 24, {align:'center'});
+  doc.setFontSize(11); doc.setFont('helvetica','normal'); doc.setTextColor(70);
+  doc.text((d.imovel||'Imóvel')+' — imagem de satélite', W/2, 32, {align:'center'});
+
+  const box={ x:mx, y:40, w:W-2*mx, h:286 };
+  doc.setDrawColor(120); doc.setLineWidth(0.3); doc.rect(box.x, box.y, box.w, box.h);
+  if (sat && sat.dataURL) {
+    // encaixa a imagem preservando proporção
+    let iw=box.w, ih=iw/sat.ratio; if(ih>box.h){ ih=box.h; iw=ih*sat.ratio; }
+    const ix=box.x+(box.w-iw)/2, iy=box.y+(box.h-ih)/2;
+    try { doc.addImage(sat.dataURL,'JPEG',ix,iy,iw,ih); } catch(e){}
+  } else {
+    doc.setFontSize(10); doc.setTextColor(120); doc.text('Imagem de satélite indisponível', W/2, box.y+box.h/2, {align:'center'});
+  }
+  // Seta Norte
+  const nx=box.x+box.w-12, ny=box.y+14;
+  doc.setDrawColor(255); doc.setFillColor(255); doc.setLineWidth(0.6);
+  doc.triangle(nx,ny-7, nx-3,ny+2.5, nx+3,ny+2.5, 'F');
+  doc.setTextColor(255); doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.text('N', nx, ny+9, {align:'center'});
+
+  doc.setFontSize(10); doc.setTextColor(30);
+  doc.text(`Área: ${_fmtNum(m.area)} m² (${_fmtNum(m.area/10000,4)} ha)   ·   Perímetro: ${_fmtNum(m.perim)} m`, W/2, box.y+box.h+7, {align:'center'});
+  doc.setFontSize(8); doc.setTextColor(90);
+  doc.text('Imagem: Esri World Imagery · SIRGAS 2000 / UTM '+m.zone+'S', box.x+3, box.y+box.h+12);
+
+  // Selo + carimbo
+  const sx=W-mx-84, sy=box.y+box.h+16, sw=84, sh=72;
+  doc.setDrawColor(90); doc.setLineWidth(0.3); doc.rect(sx, sy, sw, sh);
+  doc.setFillColor(235); doc.rect(sx, sy, sw, 6, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(50);
+  doc.text('MAPA DE LOCALIZAÇÃO', sx+sw/2, sy+4.2, {align:'center'});
+  if (selo) { try { doc.addImage(selo,'PNG',sx+2,sy+8,sw-4,sh-16); } catch(e){} }
+  doc.setFont('helvetica','normal'); doc.setFontSize(6); doc.setTextColor(120);
+  doc.text('© OpenStreetMap · marcador = posição do lote', sx+2, sy+sh-2);
+  _pdfCarimbo(doc, mx, box.y+box.h+16, (sx-mx-4), m, d);
+}
+
+// RELATÓRIO TÉCNICO — A4 (tabela de coordenadas UTM + geográficas)
+function _pdfRelatorio(doc, m, d) {
+  const W=210, mx=16; let y=20;
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(20);
+  doc.text('RELATÓRIO TÉCNICO', W/2, y, {align:'center'}); y+=9;
+  doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(40);
+  [
+    `Imóvel: ${d.imovel||'—'}`,
+    `Proprietário: ${d.prop||'—'}     Matrícula/Registro: ${d.matricula||'—'}`,
+    `Município: ${d.municipio||'—'}`,
+    `Sistema geodésico: SIRGAS 2000  ·  Projeção UTM  ·  Fuso ${m.zone}S`,
+    `Área: ${_fmtNum(m.area)} m² (${_fmtNum(m.area/10000,4)} ha)     Perímetro: ${_fmtNum(m.perim)} m     Vértices: ${m.V.length}`,
+  ].forEach(t=>{ doc.text(t, mx, y); y+=6; });
+  y+=2;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.text('Quadro de coordenadas e amarrações', mx, y); y+=5;
+  const cols=[mx, mx+16, mx+44, mx+74, mx+104, mx+134, mx+162];
+  const head=['Vért.','E (m)','N (m)','Latitude','Longitude','Azimute','Dist.(m)'];
+  const drawHead=()=>{ doc.setFillColor(228); doc.rect(mx, y-4, W-2*mx, 6, 'F'); doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(20); head.forEach((h,i)=>doc.text(h, cols[i]+1, y)); y+=5; doc.setFont('helvetica','normal'); };
+  drawHead();
+  m.V.forEach(v=>{
+    if(y>276){ doc.addPage(); y=20; drawHead(); }
+    doc.setFontSize(7.3); doc.setTextColor(40);
+    doc.text('V'+(v.id.replace(/\D/g,'')), cols[0]+1, y);
+    doc.text(_fmtNum(v.E,2), cols[1]+1, y);
+    doc.text(_fmtNum(v.N,2), cols[2]+1, y);
+    doc.text(v.lat.toFixed(6), cols[3]+1, y);
+    doc.text(v.lon.toFixed(6), cols[4]+1, y);
+    doc.text(_grausDMS(v.az), cols[5]+1, y);
+    doc.text(_fmtNum(v.dist,2), cols[6]+1, y);
+    y+=4.4;
+  });
+  y+=6; if(y>250){ doc.addPage(); y=20; }
+  doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(90);
+  doc.splitTextToSize('Observações: coordenadas planas (E, N) na projeção UTM referidas ao datum SIRGAS 2000; coordenadas geográficas (latitude/longitude) em graus decimais; azimutes planos e distâncias calculados entre vértices consecutivos, no sentido do polígono.', W-2*mx).forEach(l=>{ doc.text(l, mx, y); y+=4.6; });
+  _pdfCarimbo(doc, mx, 260, W-2*mx, m, d);
+}
+
 async function gerarMemorialPDF() {
   const idx = parseInt(document.getElementById('mem-poly').value||'0');
   const poly = _memPolys[idx];
@@ -4455,26 +4588,40 @@ async function gerarMemorialPDF() {
     const { jsPDF } = window.jspdf;
     const nome = (dados.imovel||'poligono').replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'_') || 'poligono';
 
-    // Selo de localização (bairro/região) — centróide do polígono
+    // Imagens (selo de localização + recorte de satélite) — em paralelo
     const cLat = poly.latlngs.reduce((s,p)=>s+p[0],0)/poly.latlngs.length;
     const cLon = poly.latlngs.reduce((s,p)=>s+p[1],0)/poly.latlngs.length;
-    let selo = null;
-    try { selo = await _tileMapDataURL(cLat, cLon, 14, 3); } catch(e){ console.warn('[selo]', e); }
+    msg.textContent='Baixando mapas (localização + satélite)…';
+    let selo=null, sat=null;
+    try { [selo, sat] = await Promise.all([
+      _tileMapDataURL(cLat, cLon, 14, 3),
+      _satImageWithPolygon(poly.latlngs, m),
+    ]); } catch(e){ console.warn('[imgs]', e); }
 
-    // 1) PLANTA — A3 retrato
-    const dP = new jsPDF({ unit:'mm', format:'a3', orientation:'portrait' });
-    _pdfPlanta(dP, m, dados, selo);
-    dP.save(`Planta_${nome}.pdf`);
+    msg.textContent='Montando entregáveis…';
+    const A4 = ()=>new jsPDF({ unit:'mm', format:'a4' });
+    const A3 = ()=>new jsPDF({ unit:'mm', format:'a3', orientation:'portrait' });
 
-    // 2) MEMORIAL — A4
-    await new Promise(r=>setTimeout(r,500)); // evita bloqueio de download duplo
-    const dM = new jsPDF({ unit:'mm', format:'a4' });
-    _pdfMemorial(dM, m, dados);
-    dM.save(`Memorial_${nome}.pdf`);
+    const dMem = A4(); _pdfMemorial(dMem, m, dados);
+    const dRel = A4(); _pdfRelatorio(dRel, m, dados);
+    const dPla = A3(); _pdfPlanta(dPla, m, dados, selo);              // sem imagem (vetorial + cotas)
+    const dSat = A3(); _pdfPlantaSatelite(dSat, m, dados, sat, selo);  // com recorte de satélite
 
-    msg.style.color='var(--green)'; msg.textContent='✅ Planta (A3) e Memorial (A4) gerados!';
-    toast('2 PDFs gerados: Planta A3 + Memorial A4','ok');
-    setTimeout(()=>{ msg.textContent=''; fecharMemorialModal(); }, 1600);
+    // Zipa todos os entregáveis
+    const zip = new JSZip();
+    const pasta = zip.folder(`Entregaveis_${nome}`);
+    pasta.file(`Memorial_Descritivo_${nome}.pdf`,  dMem.output('arraybuffer'));
+    pasta.file(`Relatorio_Tecnico_${nome}.pdf`,    dRel.output('arraybuffer'));
+    pasta.file(`Planta_${nome}.pdf`,               dPla.output('arraybuffer'));
+    pasta.file(`Planta_Satelite_${nome}.pdf`,      dSat.output('arraybuffer'));
+    const blob = await zip.generateAsync({ type:'blob' });
+    const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=`Entregaveis_${nome}.zip`; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+
+    msg.style.color='var(--green)'; msg.textContent='✅ ZIP gerado: memorial + relatório + 2 plantas';
+    toast('Entregáveis gerados (ZIP)','ok');
+    setTimeout(()=>{ msg.textContent=''; fecharMemorialModal(); }, 1800);
   } catch(e) {
     console.error('[memorial]', e);
     msg.style.color='var(--red2)'; msg.textContent='Erro ao gerar: '+e.message;
@@ -4542,6 +4689,18 @@ function _pdfPlanta(doc, m, d, selo) {
   const pts=m.V.map(v=>[X(v.E),Y(v.N)]);
   doc.setDrawColor(192,57,43); doc.setLineWidth(0.7);
   for (let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length]; doc.line(a[0],a[1],b[0],b[1]); }
+  // Cotagem — distância de cada lado escrita sobre a lateral
+  doc.setFontSize(7); doc.setTextColor(120,20,20);
+  for (let i=0;i<m.V.length;i++){
+    const a=m.V[i], b=m.V[(i+1)%m.V.length];
+    const x1=X(a.E),y1=Y(a.N),x2=X(b.E),y2=Y(b.N);
+    let ang=Math.atan2(y2-y1,x2-x1)*180/Math.PI;   // ângulo de tela (y p/ baixo)
+    if(ang>90) ang-=180; if(ang<-90) ang+=180;       // mantém o texto “de pé”
+    // desloca o rótulo levemente para fora da linha
+    const nx=-(y2-y1), ny=(x2-x1), nl=Math.hypot(nx,ny)||1;
+    const ox=nx/nl*2.2, oy=ny/nl*2.2;
+    doc.text(`${_fmtNum(a.dist,2)} m`, (x1+x2)/2+ox, (y1+y2)/2+oy, {align:'center', angle:-ang});
+  }
   // Vértices + rótulos
   doc.setFontSize(7.5);
   m.V.forEach(v=>{ const x=X(v.E),y=Y(v.N);
