@@ -20,11 +20,16 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    // Verificar usuário autenticado
+    // Cliente com o token do usuário — SÓ para identificar quem é (não escreve privilégio)
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: req.headers.get('Authorization') || '' } } }
+    )
+    // Cliente service_role — a ÚNICA via que grava status/trial (o cliente nunca escreve isso)
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
     const { data: { user }, error: authErr } = await supabase.auth.getUser()
@@ -52,7 +57,7 @@ serve(async (req) => {
     // Ativar trial
     const trialExpires = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString()
 
-    const { error: updateErr } = await supabase
+    const { error: updateErr } = await admin
       .from('profiles')
       .update({
         status: 'trial',

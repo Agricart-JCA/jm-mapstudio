@@ -3359,7 +3359,7 @@ async function doRegister() {
         const patchOk = await fetch(SUPABASE_URL + '/rest/v1/profiles?id=eq.' + userId, {
           method: 'PATCH',
           headers: { ...sbH(data.access_token), 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ phone: tel, status: 'pending' })
+          body: JSON.stringify({ phone: tel })
         }).then(r => r.ok).catch(() => false);
         if (!patchOk) {
           // Segunda tentativa após 1s
@@ -3367,7 +3367,7 @@ async function doRegister() {
           await fetch(SUPABASE_URL + '/rest/v1/profiles?id=eq.' + userId, {
             method: 'PATCH',
             headers: { ...sbH(data.access_token), 'Prefer': 'return=minimal' },
-            body: JSON.stringify({ phone: tel, status: 'pending' })
+            body: JSON.stringify({ phone: tel })
           }).catch(() => console.warn('[Cadastro] PATCH perfil falhou após 2 tentativas'));
         }
       } else {
