@@ -2726,6 +2726,16 @@ async function initAuth() {
   const pixEl = document.getElementById('price-pix-val');
   if (pixEl) pixEl.textContent = PRECO_PIX;
 
+  // Deep link da landing page (?planos=1) — abre direto na tela de planos
+  if (params.get('planos') === '1') {
+    const sessPlanos = getSession();
+    const hasValidSessPlanos = sessPlanos?.access_token && _jwtExp(sessPlanos.access_token) > Date.now();
+    if (!hasValidSessPlanos) {
+      window.history.replaceState({}, '', window.location.pathname);
+      showLoginOverlayWithPricing();
+    }
+  }
+
   // Detectar link de redefinição de senha (recovery)
   const hash = new URLSearchParams(window.location.hash.replace('#',''));
   if (hash.get('type') === 'recovery' && hash.get('access_token')) {
