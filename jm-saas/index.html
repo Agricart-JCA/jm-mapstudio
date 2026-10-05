@@ -997,6 +997,9 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
 .tab-btn:hover { color:var(--text); }
 .tab-btn.active { color:var(--red); border-bottom-color:var(--red); text-shadow:0 0 14px rgba(231,76,60,.55); }
 .tab-btn .tab-icon { font-size:15px; display:block; margin-bottom:2px; }
+.tab-btn-cliente { color:var(--green); }
+.tab-btn-cliente.active { color:var(--green); border-bottom-color:var(--green); text-shadow:0 0 14px rgba(39,174,96,.55); }
+.tab-btn-cliente:hover { color:#2ecc71; }
 
 .tab-panel { display:none; flex-direction:column; flex:1; overflow-y:auto; overflow-x:hidden; min-height:0; }
 .tab-panel.active { display:flex; }
@@ -1533,6 +1536,9 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     <button class="tab-btn" id="tabn-4" onclick="switchTab(4)">
       <span class="tab-icon">🏘</span>REURB
     </button>
+    <button class="tab-btn tab-btn-cliente" id="tabn-5" onclick="switchTab(5)">
+      <span class="tab-icon">📁</span>Cliente
+    </button>
   </div>
 
   <!-- ════ ABA 1 — WEBGIS ════ -->
@@ -1626,7 +1632,13 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
               <input id="mem-registro" placeholder="Opcional" style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;font-family:var(--font);outline:none;box-sizing:border-box">
             </div>
           </div>
-          <div style="font-size:10px;color:var(--dim);text-align:center;line-height:1.6">Gera um <b>.ZIP</b> com: Memorial Descritivo (A4) · Relatório Técnico (A4) · Planta (A3) · Planta com Satélite (A3, com cotas). Carimbo em branco se não preencher.</div>
+          <div>
+            <label class="ep-label">Enviar para o cliente (opcional)</label>
+            <select id="mem-cliente" style="width:100%;padding:9px 11px;background:var(--card2);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-size:12px;font-family:var(--font);outline:none">
+              <option value="">— Não enviar, só baixar —</option>
+            </select>
+          </div>
+          <div style="font-size:10px;color:var(--dim);text-align:center;line-height:1.6">Gera um <b>.ZIP</b> com: Memorial Descritivo (A4) · Relatório Técnico (A4) · Planta (A3) · Planta com Satélite (A3, com cotas). Carimbo em branco se não preencher. Se escolher um cliente, o PDF e o KML também ficam disponíveis pra ele na aba Cliente.</div>
           <div id="mem-msg" style="font-size:11px;color:var(--sub);min-height:16px;text-align:center"></div>
           <button class="btn-techno" id="mem-gerar" onclick="gerarMemorialPDF()" style="width:100%;padding:12px;font-size:13px">📦 Gerar entregáveis (ZIP)</button>
         </div>
@@ -2434,6 +2446,80 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     </div>
   </div>
 
+  <!-- ════ ABA 5 — CLIENTE ════ -->
+  <div id="tab-5" class="tab-panel">
+
+    <!-- Visão do cliente: lista dos arquivos dele -->
+    <div id="cliente-view-dados" style="display:none;padding:14px">
+      <div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px">📁 Seus Arquivos</div>
+      <div style="font-size:11px;color:var(--sub);margin-bottom:14px">Memoriais, plantas e arquivos KML entregues pela JM Topografia.</div>
+      <div id="cliente-arquivos-lista" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+    <!-- Visão da equipe: gestão de clientes -->
+    <div id="cliente-view-gestao" style="display:none;padding:14px">
+      <div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:4px">📁 Clientes</div>
+      <div style="font-size:11px;color:var(--sub);margin-bottom:14px">Crie o acesso do cliente e envie os arquivos que ele poderá baixar.</div>
+
+      <button class="adm-add-btn" style="margin-bottom:14px" onclick="document.getElementById('cliente-novo-form').style.display='flex'">+ Novo Cliente</button>
+
+      <div id="cliente-novo-form" style="display:none;flex-direction:column;gap:10px;background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:16px">
+        <div class="adm-field" style="margin-bottom:0">
+          <label class="adm-label">Nome</label>
+          <input class="adm-inp" type="text" id="cli-novo-nome" placeholder="Ex: Maria Souza">
+        </div>
+        <div class="adm-field" style="margin-bottom:0">
+          <label class="adm-label">E-mail</label>
+          <input class="adm-inp" type="email" id="cli-novo-email" placeholder="email@exemplo.com">
+        </div>
+        <div class="adm-field" style="margin-bottom:0">
+          <label class="adm-label">Telefone (opcional)</label>
+          <input class="adm-inp" type="text" id="cli-novo-phone" placeholder="(21) 99999-9999">
+        </div>
+        <button class="adm-add-btn" onclick="criarCliente()">Criar acesso</button>
+        <div class="adm-msg" id="cli-novo-msg"></div>
+        <div id="cli-novo-senha-box" style="display:none;background:var(--card2);border:1px solid var(--green);border-radius:8px;padding:10px;font-size:12px">
+          <div style="color:var(--green);font-weight:700;margin-bottom:4px">✓ Cliente criado — copie a senha agora:</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <code id="cli-novo-senha-txt" class="mono" style="flex:1;color:var(--text);background:var(--panel);padding:6px 8px;border-radius:6px;word-break:break-all"></code>
+            <button onclick="navigator.clipboard.writeText(document.getElementById('cli-novo-senha-txt').textContent);toast('Senha copiada','ok')" style="padding:6px 10px;background:var(--card2);border:1px solid var(--border2);border-radius:6px;color:var(--text);cursor:pointer;font-size:11px">Copiar</button>
+          </div>
+          <div style="color:var(--dim);font-size:10px;margin-top:4px">Essa senha não aparece de novo. Envie por WhatsApp/e-mail manualmente.</div>
+        </div>
+      </div>
+
+      <div class="adm-sec-title">Clientes cadastrados</div>
+      <div id="cliente-lista-staff" style="display:flex;flex-direction:column;gap:6px;margin-bottom:18px"></div>
+
+      <div id="cliente-upload-area" style="display:none;background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:14px">
+        <div class="adm-sec-title" style="margin-bottom:8px">Enviar arquivo para <span id="cliente-upload-nome" style="color:var(--text)"></span></div>
+        <div class="adm-field" style="margin-bottom:0">
+          <label class="adm-label">Título</label>
+          <input class="adm-inp" type="text" id="cli-up-titulo" placeholder="Ex: Memorial Descritivo - Sítio Boa Vista">
+        </div>
+        <div class="adm-field" style="margin-bottom:0">
+          <label class="adm-label">Tipo</label>
+          <select class="adm-sel" id="cli-up-tipo">
+            <option value="memorial">Memorial</option>
+            <option value="planta">Planta</option>
+            <option value="relatorio">Relatório</option>
+            <option value="kml">KML</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div class="adm-field" style="margin-bottom:0">
+          <label class="adm-label">Arquivo (PDF ou KML)</label>
+          <input class="adm-inp" type="file" id="cli-up-arquivo" accept=".pdf,.kml,application/pdf">
+        </div>
+        <button class="adm-add-btn" onclick="uploadArquivoCliente()">Enviar</button>
+        <div class="adm-msg" id="cli-up-msg"></div>
+        <div class="adm-sec-title" style="margin-top:14px">Arquivos já enviados</div>
+        <div id="cliente-arquivos-staff" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+    </div>
+
+  </div>
+
 <!-- ══ SUBSCRIPTION REQUIRED OVERLAY ══ -->
 <div id="sub-required-overlay">
   <div id="sub-required-card">
@@ -2625,10 +2711,12 @@ const CHECKOUT_FN_URL  = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/
 const INVITE_FN_URL    = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/invite-user';
 const TRIAL_FN_URL     = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/activate-trial';
 const UPLOAD_PLANTA_URL= 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/upload-planta';
+const CREATE_CLIENTE_URL = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/create-cliente';
+const UPLOAD_CLIENTE_ARQUIVO_URL = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/functions/v1/upload-cliente-arquivo';
 const SUPABASE_REST    = 'https://zzjizqiafnnuqmrkhjqj.supabase.co/rest/v1';
 
-const ROLE_LABELS = { admin:'Administrador', operador:'Operador', visualizador:'Visualizador' };
-const ROLE_COLORS = { admin:'#c0392b', operador:'#2980b9', visualizador:'#27ae60' };
+const ROLE_LABELS = { admin:'Administrador', operador:'Operador', visualizador:'Visualizador', cliente:'Cliente' };
+const ROLE_COLORS = { admin:'#c0392b', operador:'#2980b9', visualizador:'#27ae60', cliente:'#27ae60' };
 
 // ── Helpers REST ───────────────────────────────
 const SESS_KEY = 'jmms_sb';
@@ -3109,7 +3197,7 @@ async function applySession(token, isCheckoutReturn = false) {
   const profile = (profiles?.length) ? profiles[0] : { name: user.email.split('@')[0], role: 'operador', status: 'pending', must_change_password: false, trial_expires_at: null };
   // role vem exclusivamente do banco — nunca sobrescrever no frontend
 
-  if (profile.role !== 'admin') {
+  if (!['admin', 'cliente'].includes(profile.role)) {
     let hasAccess = false;
     const maxTries = isCheckoutReturn ? 5 : 1;
     for (let t = 0; t < maxTries && !hasAccess; t++) {
@@ -3148,7 +3236,10 @@ async function applySession(token, isCheckoutReturn = false) {
   if (profile.role === 'admin') {
     document.getElementById('btn-admin').style.display = 'flex';
   }
+  window._userId   = user.id;
+  window._userRole = profile.role;
   applyRoleRestrictions(profile.role);
+  if (profile.role === 'cliente') switchTab(5);
 
   // Salva uid na sessão (usado por doChangePwd como fallback)
   const sess = getSession();
@@ -3182,7 +3273,7 @@ function entrarComoVisitante(nome) {
   applyRoleRestrictions('visualizador');
 }
 function applyRoleRestrictions(role) {
-  if (role === 'visualizador') {
+  if (role === 'visualizador' || role === 'cliente') {
     document.querySelectorAll('.draw-btn').forEach(b => { b.disabled=true; b.title='Seu perfil não permite desenhar'; });
     document.querySelectorAll('.measure-btn').forEach(b => b.disabled=true);
     const dc = document.querySelector('.leaflet-draw-toolbar');
@@ -4390,8 +4481,22 @@ function abrirMemorialModal() {
     _memAtualizarInfo();
   }
   document.getElementById('memorial-overlay').style.display = 'flex';
+  _memPopularClientes();
 }
 function fecharMemorialModal(){ document.getElementById('memorial-overlay').style.display='none'; }
+
+async function _memPopularClientes() {
+  const campo = document.getElementById('mem-cliente')?.closest('div');
+  const isStaff = window._userRole === 'admin';
+  if (!campo) return;
+  campo.style.display = isStaff ? 'block' : 'none';
+  if (!isStaff) return;
+  const sess = getSession();
+  const clientes = await sbGet(`/rest/v1/profiles?role=eq.cliente&select=id,name&order=name.asc`, sess?.access_token);
+  const sel = document.getElementById('mem-cliente');
+  sel.innerHTML = '<option value="">— Não enviar, só baixar —</option>' +
+    (clientes || []).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+}
 
 function _memAtualizarInfo() {
   const i = parseInt(document.getElementById('mem-poly').value||'0');
@@ -4612,6 +4717,45 @@ function _pdfRelatorio(doc, m, d) {
   _pdfCarimbo(doc, mx, 260, W-2*mx, m, d);
 }
 
+function _memGerarKml(latlngs, nome) {
+  const coords = latlngs.map(p => `${p[1]},${p[0]},0`).join(' ');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>${esc(nome)}</name>
+    <description>Gerado pelo JM MapStudio</description>
+    <Style id="jmStyle">
+      <LineStyle><color>ff2980b9</color><width>2</width></LineStyle>
+      <PolyStyle><color>292980b9</color></PolyStyle>
+    </Style>
+    <Placemark>
+      <name>${esc(nome)}</name>
+      <styleUrl>#jmStyle</styleUrl>
+      <Polygon>
+        <outerBoundaryIs><LinearRing><coordinates>${coords}</coordinates></LinearRing></outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+  </Document>
+</kml>`;
+}
+
+async function _enviarArquivoParaCliente(clienteId, blob, filename, titulo, tipo) {
+  const sess = getSession();
+  const form = new FormData();
+  form.append('cliente_id', clienteId);
+  form.append('titulo', titulo);
+  form.append('tipo', tipo);
+  form.append('arquivo', blob, filename);
+  const res = await fetch(UPLOAD_CLIENTE_ARQUIVO_URL, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + sess?.access_token },
+    body: form,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'falha no upload');
+  return data;
+}
+
 async function gerarMemorialPDF() {
   const idx = parseInt(document.getElementById('mem-poly').value||'0');
   const poly = _memPolys[idx];
@@ -4663,6 +4807,24 @@ async function gerarMemorialPDF() {
     const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
     a.download=`Entregaveis_${nome}.zip`; a.click();
     setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+
+    // Envio opcional pro portal do cliente (PDF + KML)
+    const clienteId = document.getElementById('mem-cliente')?.value || '';
+    if (clienteId) {
+      msg.textContent = 'Enviando pro cliente…';
+      const kml = _memGerarKml(poly.latlngs, dados.imovel || nome);
+      const kmlBlob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
+      const tituloBase = dados.imovel || nome;
+      try {
+        await Promise.all([
+          _enviarArquivoParaCliente(clienteId, blob,    `Entregaveis_${nome}.zip`, `Entregáveis — ${tituloBase}`, 'planta'),
+          _enviarArquivoParaCliente(clienteId, kmlBlob, `${nome}.kml`,             `${tituloBase} (KML)`,         'kml'),
+        ]);
+      } catch (e) {
+        console.warn('[memorial→cliente]', e);
+        toast('ZIP baixado, mas falhou o envio pro cliente: ' + e.message, 'warn');
+      }
+    }
 
     msg.style.color='var(--green)'; msg.textContent='✅ ZIP gerado: memorial + relatório + 2 plantas';
     toast('Entregáveis gerados (ZIP)','ok');
@@ -5422,7 +5584,7 @@ function goToGPS() {
 // ══════════════════════════════════════════════
 function switchTab(n) {
   window._activeTab = n;
-  [1,2,3,4].forEach(i => {
+  [1,2,3,4,5].forEach(i => {
     const tp = document.getElementById('tab-' + i);
     const tb = document.getElementById('tabn-' + i);
     if (tp) tp.classList.toggle('active', i === n);
@@ -5431,8 +5593,165 @@ function switchTab(n) {
   if (n === 2) initFundiario();
   if (n === 3) initSeguranca();
   if (n === 4) reurbInit();
+  if (n === 5) initCliente();
 }
 window._activeTab = 1;
+
+// ══════════════════════════════════════════════
+// MÓDULO CLIENTE
+// ══════════════════════════════════════════════
+function initCliente() {
+  const sess = getSession();
+  if (!sess?.access_token) return;
+  // Admin-only: 'operador' não enxerga outros profiles via RLS (só admin_perfis_select),
+  // então não veria a lista de clientes mesmo tentando.
+  const isStaff = window._userRole === 'admin';
+  document.getElementById('cliente-view-dados').style.display  = isStaff ? 'none' : 'block';
+  document.getElementById('cliente-view-gestao').style.display = isStaff ? 'block' : 'none';
+  if (isStaff) carregarClientesStaff();
+  else carregarArquivosClientePortal();
+}
+
+// ── Visão do cliente ───────────────────────────
+async function carregarArquivosClientePortal() {
+  const listaEl = document.getElementById('cliente-arquivos-lista');
+  if (!listaEl) return;
+  const sess = getSession();
+  const arquivos = await sbGet(`/rest/v1/cliente_arquivos?cliente_id=eq.${window._userId}&order=created_at.desc`, sess.access_token);
+  if (!arquivos?.length) {
+    listaEl.innerHTML = '<div style="font-size:11px;color:var(--dim);text-align:center;padding:16px">Nenhum arquivo ainda. Assim que a JM enviar algo, aparece aqui.</div>';
+    return;
+  }
+  const tipoLbl = { memorial:'Memorial', planta:'Planta', relatorio:'Relatório', kml:'KML', outro:'Arquivo' };
+  listaEl.innerHTML = arquivos.map(a => `
+    <div style="background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:3px">${esc(a.titulo)}</div>
+      <div style="font-size:10px;color:var(--sub);margin-bottom:8px">${tipoLbl[a.tipo] || a.tipo} · ${new Date(a.created_at).toLocaleDateString('pt-BR')}</div>
+      <a href="${safeUrl(a.url)}" target="_blank" rel="noopener" class="btn-techno" style="display:block;text-align:center;padding:8px 0;font-size:11px;text-decoration:none">⬇ Baixar</a>
+    </div>
+  `).join('');
+}
+
+// ── Visão da equipe (admin/operador) ───────────
+window._clienteSelecionado = null;
+
+async function carregarClientesStaff() {
+  const listaEl = document.getElementById('cliente-lista-staff');
+  if (!listaEl) return;
+  const sess = getSession();
+  const clientes = await sbGet(`/rest/v1/profiles?role=eq.cliente&select=id,name,email,phone&order=name.asc`, sess.access_token);
+  if (!clientes?.length) {
+    listaEl.innerHTML = '<div style="font-size:11px;color:var(--dim);text-align:center;padding:8px">Nenhum cliente cadastrado ainda</div>';
+    return;
+  }
+  listaEl.innerHTML = clientes.map(c => `
+    <div onclick="selecionarClienteStaff('${esc(c.id)}','${esc(c.name)}')"
+      style="background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center"
+      id="cli-row-${esc(c.id)}">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--text)">${esc(c.name)}</div>
+        <div style="font-size:10px;color:var(--sub)">${esc(c.email || '')}</div>
+      </div>
+      <span style="font-size:10px;color:var(--green)">Enviar arquivo →</span>
+    </div>
+  `).join('');
+}
+
+function selecionarClienteStaff(id, nome) {
+  window._clienteSelecionado = id;
+  document.getElementById('cliente-upload-nome').textContent = nome;
+  document.getElementById('cliente-upload-area').style.display = 'block';
+  document.querySelectorAll('#cliente-lista-staff > div').forEach(el => el.style.borderColor = 'var(--border2)');
+  const row = document.getElementById('cli-row-' + id);
+  if (row) row.style.borderColor = 'var(--green)';
+  carregarArquivosClienteStaff(id);
+}
+
+async function carregarArquivosClienteStaff(clienteId) {
+  const listaEl = document.getElementById('cliente-arquivos-staff');
+  if (!listaEl) return;
+  const sess = getSession();
+  const arquivos = await sbGet(`/rest/v1/cliente_arquivos?cliente_id=eq.${clienteId}&order=created_at.desc`, sess.access_token);
+  listaEl.innerHTML = (arquivos?.length)
+    ? arquivos.map(a => `
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--sub);padding:6px 0;border-top:1px solid var(--border)">
+          <span>${esc(a.titulo)} · ${esc(a.tipo)}</span>
+          <a href="${safeUrl(a.url)}" target="_blank" rel="noopener" style="color:var(--green)">abrir</a>
+        </div>`).join('')
+    : '<div style="font-size:11px;color:var(--dim)">Nenhum arquivo enviado ainda</div>';
+}
+
+async function criarCliente() {
+  const nome  = (document.getElementById('cli-novo-nome').value || '').trim();
+  const email = (document.getElementById('cli-novo-email').value || '').trim().toLowerCase();
+  const phone = (document.getElementById('cli-novo-phone').value || '').trim();
+  const msgEl = document.getElementById('cli-novo-msg');
+  const boxEl = document.getElementById('cli-novo-senha-box');
+  boxEl.style.display = 'none';
+  if (!nome || !email) { msgEl.className = 'adm-msg err'; msgEl.textContent = 'Preencha nome e e-mail.'; return; }
+
+  msgEl.className = 'adm-msg'; msgEl.textContent = 'Criando...';
+  const sess = getSession();
+  let result;
+  try {
+    const res = await fetch(CREATE_CLIENTE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + sess?.access_token },
+      body: JSON.stringify({ email, name: nome, phone: phone || null }),
+    });
+    result = await res.json();
+    if (!res.ok || !result.success) throw new Error(result.error || 'Erro ao criar cliente.');
+  } catch (e) {
+    msgEl.className = 'adm-msg err';
+    msgEl.textContent = e.message || 'Erro de conexão.';
+    return;
+  }
+  msgEl.className = 'adm-msg ok';
+  msgEl.textContent = '';
+  document.getElementById('cli-novo-senha-txt').textContent = result.password;
+  boxEl.style.display = 'block';
+  document.getElementById('cli-novo-nome').value = '';
+  document.getElementById('cli-novo-email').value = '';
+  document.getElementById('cli-novo-phone').value = '';
+  carregarClientesStaff();
+}
+
+async function uploadArquivoCliente() {
+  const clienteId = window._clienteSelecionado;
+  const titulo = (document.getElementById('cli-up-titulo').value || '').trim();
+  const tipo   = document.getElementById('cli-up-tipo').value;
+  const fileEl = document.getElementById('cli-up-arquivo');
+  const msgEl  = document.getElementById('cli-up-msg');
+  if (!clienteId) { msgEl.className='adm-msg err'; msgEl.textContent='Selecione um cliente.'; return; }
+  if (!titulo)    { msgEl.className='adm-msg err'; msgEl.textContent='Preencha o título.'; return; }
+  if (!fileEl.files[0]) { msgEl.className='adm-msg err'; msgEl.textContent='Escolha um arquivo.'; return; }
+
+  msgEl.className = 'adm-msg'; msgEl.textContent = 'Enviando...';
+  const sess = getSession();
+  const form = new FormData();
+  form.append('cliente_id', clienteId);
+  form.append('titulo', titulo);
+  form.append('tipo', tipo);
+  form.append('arquivo', fileEl.files[0]);
+
+  try {
+    const res = await fetch(UPLOAD_CLIENTE_ARQUIVO_URL, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + sess.access_token },
+      body: form,
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Erro ao enviar');
+    msgEl.className = 'adm-msg ok';
+    msgEl.textContent = 'Enviado com sucesso!';
+    document.getElementById('cli-up-titulo').value = '';
+    fileEl.value = '';
+    carregarArquivosClienteStaff(clienteId);
+  } catch (e) {
+    msgEl.className = 'adm-msg err';
+    msgEl.textContent = e.message || 'Erro ao enviar arquivo.';
+  }
+}
 
 // ══════════════════════════════════════════════
 // MÓDULO FUNDIÁRIO
