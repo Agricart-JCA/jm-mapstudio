@@ -205,7 +205,7 @@ async function tratarInteractive(phone: string, id: string): Promise<void> {
     case 'assinar':
       await setEstado(phone, '');
       await sendText(phone,
-        `⭐ *Assine o JM MapStudio*\n\nConsultas ilimitadas (CAR, SIGEF, plantas) + mapa completo:\n${MAP_BASE}\n\n` +
+        `⭐ *Assine o FazendaScan*\n\nConsultas ilimitadas (CAR, SIGEF, plantas) + mapa completo:\n${MAP_BASE}\n\n` +
         `Já é assinante? Cadastre *este número de WhatsApp* no seu perfil (telefone) para liberar aqui.`);
       break;
     case 'menu':

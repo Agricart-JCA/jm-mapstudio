@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JM MapStudio – Topografia & Engenharia</title>
-<meta name="description" content="JM MapStudio — Sistema WebGIS Profissional">
-<meta property="og:title" content="JM MapStudio">
+<title>FazendaScan – Consulta de fazenda, CAR e SIGEF | por JM Topografia e Engenharia</title>
+<meta name="description" content="FazendaScan — Consulta de fazenda (CAR e SIGEF), memorial descritivo e planta georreferenciada direto no navegador. Por JM Topografia e Engenharia.">
+<meta property="og:title" content="FazendaScan">
 <meta property="og:description" content="Sistema WebGIS para gestão territorial e topografia">
 <meta name="theme-color" content="#c0392b">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTAiIGZpbGw9IiNjMDM5MmIiLz48dGV4dCB4PSI1MCUiIHk9IjU2JSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iI2ZmZiIgZm9udC1mYW1pbHk9IidTZWdvZSBVSScsQXJpYWwsc2Fucy1zZXJpZiIgZm9udC13ZWlnaHQ9IjkwMCIgZm9udC1zaXplPSIyNiI+Sk08L3RleHQ+PC9zdmc+">
@@ -1268,7 +1268,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     <div id="step-pricing" style="width:100%;display:none">
       <div style="text-align:center;margin-bottom:16px">
         <div style="font-size:13px;font-weight:700;color:var(--text)">Escolha seu plano</div>
-        <div style="font-size:11px;color:var(--sub);margin-top:4px">Acesso completo ao JM MapStudio</div>
+        <div style="font-size:11px;color:var(--sub);margin-top:4px">Acesso completo ao FazendaScan</div>
       </div>
       <!-- Plano Mensal -->
       <div class="price-card" id="card-mensal" onclick="startCheckout('mensal')">
@@ -1408,7 +1408,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       <div id="lf">JM</div>
       <div id="header-text">
         <div id="header-title">JM Topografia</div>
-        <div id="header-sub">MapStudio · WebGIS Profissional</div>
+        <div id="header-sub">FazendaScan · WebGIS Profissional</div>
       </div>
     </div>
   </div>
@@ -2526,7 +2526,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
     <div class="sr-icon">🔒</div>
     <h2>Assinatura necessária</h2>
     <p>Sua conta não possui uma assinatura ativa.<br>
-       Escolha um plano para acessar o JM MapStudio.</p>
+       Escolha um plano para acessar o FazendaScan.</p>
     <button class="sr-btn sr-btn-primary" onclick="showLoginOverlayWithPricing()">Ver planos e assinar</button>
     <button class="sr-btn sr-btn-ghost" onclick="doLogout()">Sair da conta</button>
   </div>
@@ -3165,7 +3165,7 @@ async function doForcedChangePwd() {
       document.getElementById('force-chpwd-overlay').style.display='none';
 
       // Celebra
-      toast('✅ Senha definida! Bem-vindo ao JM MapStudio!','ok',5000);
+      toast('✅ Senha definida! Bem-vindo ao FazendaScan!','ok',5000);
     } else {
       const errMsg = data?.message||data?.msg||data?.error_description||'';
       msg.textContent = _pwdHttpErr(resp.status, errMsg);
@@ -4345,7 +4345,7 @@ function exportAllDrawn(fmt){
       else if(l instanceof L.Polyline){ const c=l.getLatLngs().map(ll=>`${ll.lng},${ll.lat},0`).join(' '); geom=`<LineString><coordinates>${c}</coordinates></LineString>`; }
       return `<Placemark><name>${xmlEsc(d.name)}</name><description>${xmlEsc(d.comment||'')}</description>${geom}</Placemark>`;
     }).join('\n    ');
-    downloadFile(`<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n    <name>JM MapStudio – Desenhos</name>\n    ${marks}\n  </Document>\n</kml>`,'jm-desenhos.kml','application/vnd.google-earth.kml+xml');
+    downloadFile(`<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n  <Document>\n    <name>FazendaScan – Desenhos</name>\n    ${marks}\n  </Document>\n</kml>`,'jm-desenhos.kml','application/vnd.google-earth.kml+xml');
     toast('KML exportado','ok');
   }
 }
@@ -4723,7 +4723,7 @@ function _memGerarKml(latlngs, nome) {
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
     <name>${esc(nome)}</name>
-    <description>Gerado pelo JM MapStudio</description>
+    <description>Gerado pelo FazendaScan</description>
     <Style id="jmStyle">
       <LineStyle><color>ff2980b9</color><width>2</width></LineStyle>
       <PolyStyle><color>292980b9</color></PolyStyle>
@@ -5344,7 +5344,7 @@ function exportMeasure(){
   const kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
-    <name>JM MapStudio – Medição</name>
+    <name>FazendaScan – Medição</name>
     <Placemark>
       <name>${mode === 'area' ? 'Área medida' : 'Distância medida'}</name>
       <description>${result}</description>
@@ -6629,7 +6629,7 @@ function _sigefKml(cod) {
   const geomKml = _geomToKml(f.geometry);
   if (!geomKml) { toast('Geometria não disponível', 'warn'); return; }
   const kml = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>
-    <name>SIGEF ${cod}</name><description>Parcela SIGEF exportada pelo JM MapStudio</description>
+    <name>SIGEF ${cod}</name><description>Parcela SIGEF exportada pelo FazendaScan</description>
     <Style id="sigefStyle"><LineStyle><color>ff2980b9</color><width>2</width></LineStyle><PolyStyle><color>192980b9</color></PolyStyle></Style>
     <Placemark><name>${cod}</name><styleUrl>#sigefStyle</styleUrl>${geomKml}</Placemark>
   </Document></kml>`;
@@ -6712,7 +6712,7 @@ function _downloadCarKml(idx) {
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
     <name>${cod}</name>
-    <description>Imóvel CAR exportado pelo JM MapStudio</description>
+    <description>Imóvel CAR exportado pelo FazendaScan</description>
     <Style id="carStyle">
       <LineStyle><color>ff27ae60</color><width>2</width></LineStyle>
       <PolyStyle><color>1927ae60</color></PolyStyle>
@@ -6725,7 +6725,7 @@ function _downloadCarKml(idx) {
         <b>Área:</b> ${area} ha<br>
         <b>Status:</b> ${sit}<br>
         <b>Fonte:</b> SICAR — geoserver.car.gov.br<br>
-        <b>Exportado por:</b> JM MapStudio — jmtopografiaeng.com
+        <b>Exportado por:</b> FazendaScan — jmtopografiaeng.com
       ]]></description>
       <styleUrl>#carStyle</styleUrl>
       ${geomKml}
@@ -6908,7 +6908,7 @@ function copiarLinkLocalizacao() {
 
 function compartilharWhatsApp() {
   const nome = document.getElementById('share-modal-title').textContent;
-  const msg  = encodeURIComponent(`📍 ${nome}\nVeja no JM MapStudio:\n${_shareLinkAtual}`);
+  const msg  = encodeURIComponent(`📍 ${nome}\nVeja no FazendaScan:\n${_shareLinkAtual}`);
   window.open('https://wa.me/?text=' + msg, '_blank');
 }
 

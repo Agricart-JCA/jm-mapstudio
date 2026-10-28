@@ -56,7 +56,7 @@ serve(async (req) => {
           success_url: successUrl || `${req.headers.get('origin')}?checkout=success`,
           cancel_url:  cancelUrl  || `${req.headers.get('origin')}?checkout=cancel`,
           locale: 'pt-BR',
-          payment_intent_data: { description: 'JM MapStudio — Acesso Mensal via PIX' },
+          payment_intent_data: { description: 'FazendaScan — Acesso Mensal via PIX' },
         }
       : {
           // Cartão = assinatura recorrente

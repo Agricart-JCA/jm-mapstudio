@@ -95,7 +95,7 @@ export async function sendList(
 export async function enviarMenu(to: string): Promise<boolean> {
   return sendButtons(
     to,
-    '👋 *JM MapStudio*\nConsulta fundiária do RJ.\n\nToque numa opção ou *envie sua localização* 📍',
+    '👋 *FazendaScan*\nConsulta fundiária do RJ.\n\nToque numa opção ou *envie sua localização* 📍',
     [
       { id: 'menu_car',     titulo: '🌱 Consultar CAR' },
       { id: 'menu_sigef',   titulo: '🏛 Consultar SIGEF' },
@@ -110,7 +110,7 @@ export async function enviarPaywall(to: string, usadas: number): Promise<boolean
   return sendButtons(
     to,
     `🔒 Você já usou suas *${usadas} consultas gratuitas*.\n\n` +
-    `Assine o *JM MapStudio* para consultas *ilimitadas* — CAR, SIGEF, plantas e mais.\n\n` +
+    `Assine o *FazendaScan* para consultas *ilimitadas* — CAR, SIGEF, plantas e mais.\n\n` +
     `Já é assinante? Cadastre este WhatsApp no seu perfil para liberar.`,
     [
       { id: 'assinar',  titulo: '⭐ Assinar agora' },
@@ -131,7 +131,7 @@ export async function markRead(messageId: string): Promise<void> {
 // ── Mensagem de boas-vindas ───────────────────────────────────
 export function msgBoasVindas(): string {
   return (
-    '👋 *Bem-vindo ao JM MapStudio!*\n' +
+    '👋 *Bem-vindo ao FazendaScan!*\n' +
     '_Consulta fundiária do RJ direto no WhatsApp_\n\n' +
     '📍 *Envie sua localização* e receba tudo do ponto:\n' +
     '   CAR · SIGEF · plantas · embargos IBAMA\n\n' +
@@ -164,7 +164,7 @@ export function formatarRelatorio(params: {
   const { lat, lon, municipio, imoveis, sigef, embargos, plantas, linkMapa } = params;
   const linhas: string[] = [];
 
-  linhas.push('📍 *Relatório Fundiário — JM MapStudio*');
+  linhas.push('📍 *Relatório Fundiário — FazendaScan*');
   linhas.push(`📌 \`${lat.toFixed(6)}, ${lon.toFixed(6)}\``);
   linhas.push('');
 

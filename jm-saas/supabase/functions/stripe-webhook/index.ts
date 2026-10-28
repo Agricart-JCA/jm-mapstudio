@@ -116,7 +116,7 @@ async function enviarEmail(
         password: GMAIL_APP_PASS,
       })
       await client.send({
-        from: `JM MapStudio <${GMAIL_USER}>`,
+        from: `FazendaScan <${GMAIL_USER}>`,
         to: para,
         subject: assunto,
         content: 'auto',
@@ -168,7 +168,7 @@ function htmlAcesso(
 
     <!-- Header -->
     <div style="background:linear-gradient(135deg,#c0392b,#8e1a13);padding:32px 36px;text-align:center">
-      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:800;letter-spacing:.5px">JM MapStudio</h1>
+      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:800;letter-spacing:.5px">FazendaScan</h1>
       <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:13px">JM Topografia e Engenharia</p>
     </div>
 
@@ -178,7 +178,7 @@ function htmlAcesso(
         ${senha ? `Bem-vindo, ${primeiroNome}! 🎉` : `Acesso confirmado, ${primeiroNome}! ✅`}
       </h2>
       <p style="color:#555;line-height:1.7;margin:0 0 24px">
-        Seu pagamento foi confirmado e seu acesso ao <strong>JM MapStudio</strong> está ativo.
+        Seu pagamento foi confirmado e seu acesso ao <strong>FazendaScan</strong> está ativo.
       </p>
 
       <!-- Credenciais -->
@@ -209,7 +209,7 @@ function htmlAcesso(
            style="display:inline-block;background:linear-gradient(135deg,#c0392b,#922b21);color:#fff;
                   padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;
                   font-size:15px;letter-spacing:.3px">
-          Acessar o JM MapStudio →
+          Acessar o FazendaScan →
         </a>
       </div>
 
@@ -261,7 +261,7 @@ function htmlAdmin(
 <body style="margin:0;padding:0;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
   <div style="max-width:520px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)">
     <div style="background:linear-gradient(135deg,#1a237e,#0d1b6b);padding:28px 36px">
-      <h1 style="margin:0;color:#fff;font-size:18px;font-weight:800">🎉 Novo Assinante — JM MapStudio</h1>
+      <h1 style="margin:0;color:#fff;font-size:18px;font-weight:800">🎉 Novo Assinante — FazendaScan</h1>
       <p style="margin:4px 0 0;color:rgba(255,255,255,.7);font-size:12px">${dataPagamento}</p>
     </div>
     <div style="padding:32px">
@@ -497,7 +497,7 @@ async function processarEvento(evento: Stripe.Event) {
       const primeiroNome = nome ? nome.split(' ')[0] : 'Cliente'
       const emailComprador = await enviarEmail(
         email,
-        `✅ Acesso liberado ao JM MapStudio — Plano ${plano}`,
+        `✅ Acesso liberado ao FazendaScan — Plano ${plano}`,
         htmlAcesso(primeiroNome, email, senhaProvisoria, plano, APP_URL)
       )
 
