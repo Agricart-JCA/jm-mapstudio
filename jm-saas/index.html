@@ -1928,7 +1928,7 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); display
       <div id="fund-sigef-list" style="display:flex;flex-direction:column;gap:6px"></div>
       <div id="fund-sigef-empty" style="display:none;background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--sub)">
         <div style="margin-bottom:8px;text-align:center">Sem certificações SIGEF neste ponto</div>
-        <a id="fund-sigef-link" href="https://certificacao.incra.gov.br" target="_blank"
+        <a id="fund-sigef-link" href="https://sigef.incra.gov.br/consultar/parcelas/" target="_blank" rel="noopener"
           style="display:block;text-align:center;padding:7px;background:rgba(41,128,185,.1);color:#2980b9;border:1px solid rgba(41,128,185,.3);border-radius:7px;font-size:10px;font-weight:700;text-decoration:none">
           🔗 Consultar no portal INCRA
         </a>
@@ -5828,6 +5828,7 @@ function _fundOnEach(feature, layer) {
 let _fundMode = 'municipios';
 
 function fundSetMode(mode) {
+  const mudouModo = (_fundMode !== mode); // reaplicar o mesmo modo não deve apagar resultados na tela
   _fundMode = mode;
   _fundModoCAR = (mode === 'car');
 
@@ -5869,19 +5870,19 @@ function fundSetMode(mode) {
       if (_sigefLayer) { map.removeLayer(_sigefLayer); _sigefLayer = null; }
       if (_sigefMarker){ map.removeLayer(_sigefMarker);_sigefMarker= null; }
       _carRemoveWms();
-      _sigefRemoveWms();
+      _sigefOcultarParcelas();
       if (_fundLayer)  { if (!map.hasLayer(_fundLayer)) map.addLayer(_fundLayer); }
     } else if (mode === 'car') {
       if (_fundLayer && map.hasLayer(_fundLayer)) map.removeLayer(_fundLayer);
       if (_sigefLayer) { map.removeLayer(_sigefLayer); _sigefLayer = null; }
       if (_sigefMarker){ map.removeLayer(_sigefMarker);_sigefMarker= null; }
-      _sigefRemoveWms();
+      _sigefOcultarParcelas();
       // _carWmsLayer gerenciado por _carSetupWms()
     } else if (mode === 'sigef') {
       if (_fundLayer && map.hasLayer(_fundLayer)) map.removeLayer(_fundLayer);
       if (_carLayer)   { map.removeLayer(_carLayer);   _carLayer   = null; }
       _carRemoveWms();
-      _sigefAddWms();
+      _sigefDesenharParcelas(); // desenha da base local (se já carregada)
     }
   } catch(e) { console.warn('[fundSetMode] layer err:', e); }
 
@@ -5889,8 +5890,10 @@ function fundSetMode(mode) {
   const show = (id, vis) => { const el=document.getElementById(id); if(el) el.style.display = vis ? 'block' : 'none'; };
   show('fund-mun-panel',   mode === 'municipios');
   show('fund-instrucao',   mode === 'municipios');
-  show('fund-car-panel',   false); // só aparece após query retornar resultado
-  show('fund-sigef-panel', false); // idem
+  if (mudouModo) {
+    show('fund-car-panel',   false); // só aparece após query retornar resultado
+    show('fund-sigef-panel', false); // idem
+  }
   show('fund-sigef-search', mode === 'sigef');
 
   // Botão GPS — só aparece em CAR/SIGEF (o diferencial de campo)
@@ -5917,7 +5920,8 @@ function fundSetMode(mode) {
   }
   if (mode === 'sigef') {
     toast('🏛 SIGEF ativo — parcelas certificadas do RJ no mapa', 'ok');
-    _sigefCarregarBase(); // baixa a base local em paralelo (1ª vez apenas)
+    // baixa a base local (1ª vez apenas) e desenha as parcelas assim que chegar
+    _sigefCarregarBase().then(() => _sigefDesenharParcelas());
   }
 }
 
@@ -6086,63 +6090,166 @@ let _carFeats    = [];
 let _sigefLayer   = null;
 let _sigefGeojson = null;  // cache do GeoJSON SIGEF (upload manual)
 let _sigefMarker  = null;  // marcador do ponto consultado
-let _sigefWmsLayer = null; // reservado: camada WMS SIGEF (INCRA nacional indisponível no momento)
-let _sigefWmsOk   = false;
-// Portais oficiais do INCRA que respondem (validados):
+// Portais oficiais do INCRA que respondem (validados em nov/2026):
 const SIGEF_PORTAL  = 'https://sigef.incra.gov.br';
-const INCRA_ACERVO  = 'https://acervofundiario.incra.gov.br/acervo/acv.php'; // mapa público de parcelas
-// WMS i3geo do INCRA — endpoint descoberto via KML do acervo (funciona via https):
-const SIGEF_WMS_URL   = 'https://acervofundiario.incra.gov.br/i3geo/ogc.php';
-const SIGEF_WMS_LAYER = 'certificada_sigef_particular_rj'; // por enquanto: só RJ
-// Base local de parcelas (gerada por tools/converter_sigef.js — atualizar mensalmente):
+// O antigo Acervo Fundiário (acervofundiario.incra.gov.br) e o WMS i3geo dele foram
+// desativados pelo INCRA (o domínio não existe mais). A consulta pública de parcelas é esta:
+const INCRA_ACERVO  = 'https://sigef.incra.gov.br/consultar/parcelas/';
+// Base local de parcelas (gerada por tools/converter_sigef.js — atualizar mensalmente).
+// É a ÚNICA fonte do modo SIGEF: desenho no mapa, consulta por ponto e busca por código.
 const SIGEF_GEOJSON_URL = './sigef_rj.geojson';
-let _sigefBaseCarregando = false;
-
-function _sigefAddWms() {
-  if (_sigefWmsLayer) return;
-  try {
-    _sigefWmsLayer = L.tileLayer.wms(SIGEF_WMS_URL, {
-      layers: SIGEF_WMS_LAYER, format:'image/png', transparent:true,
-      version:'1.1.1', opacity:0.8, attribution:'INCRA/SIGEF',
-      tema: SIGEF_WMS_LAYER, // param extra exigido pelo i3geo
-      updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 2
-    });
-    _sigefWmsLayer.once('load', () => { _sigefWmsOk = true; });
-    _sigefWmsLayer.on('tileerror', () => { _sigefWmsOk = false; });
-    map.addLayer(_sigefWmsLayer);
-  } catch(e) { console.warn('[SIGEF WMS add]', e); }
-}
+let _sigefBasePromise = null;   // download em andamento (compartilhado entre chamadas)
 
 // ── Base local SIGEF RJ: carrega 1x sob demanda (fica em cache) ──
-async function _sigefCarregarBase() {
-  if (_sigefGeojson || _sigefBaseCarregando) return _sigefGeojson;
-  _sigefBaseCarregando = true;
+// Quem chamar durante o download ESPERA o mesmo download terminar
+// (antes retornava vazio na hora e a consulta dizia "nada encontrado").
+function _sigefCarregarBase() {
+  if (_sigefGeojson) return Promise.resolve(_sigefGeojson);
+  if (_sigefBasePromise) return _sigefBasePromise;
   const hint = document.getElementById('fund-mode-hint');
-  if (hint) hint.textContent = '⬇ Baixando base SIGEF RJ (1ª vez — fica salva)…';
-  try {
-    const r = await fetch(SIGEF_GEOJSON_URL, { signal: AbortSignal.timeout(120000) });
-    if (r.ok) {
-      _sigefGeojson = await r.json();
-      if (hint && _fundMode === 'sigef')
-        hint.textContent = `🏛 ${_sigefGeojson.features.length.toLocaleString('pt-BR')} parcelas SIGEF/RJ — toque no mapa ou use o GPS`;
-    } else if (hint && _fundMode === 'sigef') {
-      hint.textContent = '⚠ Base SIGEF indisponível — usando só o visual WMS';
+  const setHint = t => { if (hint && _fundMode === 'sigef') hint.textContent = t; };
+  setHint('⬇ Baixando base SIGEF RJ (1ª vez — fica salva)…');
+  _sigefBasePromise = (async () => {
+    // AbortController manual: AbortSignal.timeout() não existe em navegadores mais antigos
+    const ctrl  = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 180000) : null;
+    try {
+      const r = await fetch(SIGEF_GEOJSON_URL, ctrl ? { signal: ctrl.signal } : {});
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const gj = await r.json();
+      if (!gj || !Array.isArray(gj.features)) throw new Error('GeoJSON inválido');
+      _sigefIndexar(gj);
+      _sigefGeojson = gj;
+      setHint(`🏛 ${gj.features.length.toLocaleString('pt-BR')} parcelas SIGEF/RJ — toque numa parcela ou use o GPS`);
+    } catch(e) {
+      console.warn('[SIGEF base]', e);
+      setHint('⚠ Falha ao baixar a base SIGEF — toque em SIGEF de novo para tentar novamente');
+    } finally {
+      if (timer) clearTimeout(timer);
+      _sigefBasePromise = null;
     }
-  } catch(e) {
-    console.warn('[SIGEF base]', e);
-    if (hint && _fundMode === 'sigef') hint.textContent = '⚠ Falha ao baixar base SIGEF — tente novamente';
-  } finally {
-    _sigefBaseCarregando = false;
-  }
-  return _sigefGeojson;
+    return _sigefGeojson;
+  })();
+  return _sigefBasePromise;
 }
 
-function _sigefRemoveWms() {
-  if (!_sigefWmsLayer) return;
-  try { map.removeLayer(_sigefWmsLayer); } catch(e) {}
-  _sigefWmsLayer = null;
-  _sigefWmsOk   = false;
+// ── Índice espacial simples: bbox + centro de cada parcela (calculado 1x) ──
+function _sigefIndexar(gj) {
+  gj.features.forEach(f => {
+    const g = f.geometry;
+    if (!g) return;
+    const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    polys.forEach(p => (p[0] || []).forEach(c => {
+      if (c[0] < x0) x0 = c[0]; if (c[0] > x1) x1 = c[0];
+      if (c[1] < y0) y0 = c[1]; if (c[1] > y1) y1 = c[1];
+    }));
+    if (x0 !== Infinity) f._bb = [x0, y0, x1, y1];
+  });
 }
+
+// ── Desenho dos perímetros no mapa a partir da base local ────────
+// Substitui o WMS do INCRA (fora do ar). Os perímetros aparecem em QUALQUER zoom,
+// como era com o WMS. Para ficar leve no celular, só entram no mapa as parcelas
+// da área visível, em duas resoluções:
+//  • zoom < 11  → contorno simplificado (erro < 1 px na tela)
+//  • zoom ≥ 11  → contorno exato da base
+const SIGEF_ZOOM_DETALHE = 11;
+const SIGEF_TOL_SIMPLES  = 0.0008;   // ~85 m em graus
+let _sigefRenderer   = null;         // canvas próprio (não interativo — o clique vai pro mapa)
+let _sigefBaseLayer  = null;         // grupo com os perímetros da área visível
+let _sigefLod        = '';           // resolução em uso: 's' (simplificada) | 'd' (detalhada)
+let _sigefNoMapa     = new Set();    // parcelas atualmente desenhadas
+let _sigefDrawTimer  = null;
+
+// Camada Leaflet de uma parcela na resolução pedida (criada 1x e reaproveitada)
+function _sigefCamada(f, lod) {
+  const key = lod === 'd' ? '_lyD' : '_lyS';
+  if (f[key]) return f[key];
+  const g = f.geometry;
+  const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+  const latlngs = polys.map(poly => {
+    if (lod === 'd') return poly.map(ring => ring.map(c => [c[1], c[0]]));
+    // simplificada: só o anel externo, reduzido por Douglas-Peucker
+    const ring = poly[0] || [];
+    let pts = ring;
+    if (ring.length > 8) {
+      const simp = L.LineUtil.simplify(ring.map(c => ({ x:c[0], y:c[1] })), SIGEF_TOL_SIMPLES);
+      if (simp.length >= 4) pts = simp.map(p => [p.x, p.y]);
+      else {
+        // parcela menor que a tolerância: vira o retângulo envolvente (continua visível)
+        let x0=Infinity, y0=Infinity, x1=-Infinity, y1=-Infinity;
+        ring.forEach(c => { if(c[0]<x0)x0=c[0]; if(c[0]>x1)x1=c[0]; if(c[1]<y0)y0=c[1]; if(c[1]>y1)y1=c[1]; });
+        pts = [[x0,y0],[x1,y0],[x1,y1],[x0,y1]];
+      }
+    }
+    return [pts.map(c => [c[1], c[0]])];
+  });
+  f[key] = L.polygon(g.type === 'Polygon' ? latlngs[0] : latlngs, {
+    renderer: _sigefGetRenderer(), pane:'sigefBase', interactive:false,
+    color:'#2980b9', weight: lod === 'd' ? 1.5 : 1, opacity:0.95,
+    fillColor:'#2980b9', fillOpacity:0.14, smoothFactor:1
+  });
+  return f[key];
+}
+
+function _sigefGetRenderer() {
+  if (_sigefRenderer) return _sigefRenderer;
+  if (!map.getPane('sigefBase')) {
+    const pane = map.createPane('sigefBase');
+    pane.style.zIndex = 390;            // abaixo do overlayPane (400): destaque da consulta fica por cima
+    pane.style.pointerEvents = 'none';  // clique atravessa e chega no mapa
+  }
+  _sigefRenderer = L.canvas({ pane:'sigefBase', padding:0.3 });
+  return _sigefRenderer;
+}
+
+function _sigefDesenharParcelas() {
+  if (_fundMode !== 'sigef' || !_sigefGeojson) return;
+  _sigefGetRenderer();
+  const lod = map.getZoom() >= SIGEF_ZOOM_DETALHE ? 'd' : 's';
+  const tela = map.getBounds();
+  const b = tela.pad(0.25); // margem: pequenos arrastos não precisam redesenhar
+  const w = b.getWest(), s = b.getSouth(), e = b.getEast(), n = b.getNorth();
+  const tw = tela.getWest(), ts = tela.getSouth(), te = tela.getEast(), tn = tela.getNorth();
+
+  if (!_sigefBaseLayer) _sigefBaseLayer = L.layerGroup();
+  if (lod !== _sigefLod) { _sigefBaseLayer.clearLayers(); _sigefNoMapa.clear(); _sigefLod = lod; }
+
+  const visiveis = new Set();
+  let naTela = 0;
+  _sigefGeojson.features.forEach(f => {
+    const bb = f._bb;
+    if (!bb || bb[0] > e || bb[2] < w || bb[1] > n || bb[3] < s) return;
+    visiveis.add(f);
+    if (bb[0] <= te && bb[2] >= tw && bb[1] <= tn && bb[3] >= ts) naTela++;
+  });
+
+  // tira o que saiu da área, põe o que entrou (o que já estava fica como está)
+  _sigefNoMapa.forEach(f => {
+    if (!visiveis.has(f)) { _sigefBaseLayer.removeLayer(_sigefCamada(f, lod)); _sigefNoMapa.delete(f); }
+  });
+  visiveis.forEach(f => {
+    if (!_sigefNoMapa.has(f)) { _sigefBaseLayer.addLayer(_sigefCamada(f, lod)); _sigefNoMapa.add(f); }
+  });
+  if (!map.hasLayer(_sigefBaseLayer)) map.addLayer(_sigefBaseLayer);
+
+  const hint = document.getElementById('fund-mode-hint');
+  if (hint) hint.textContent = naTela
+    ? `🏛 ${naTela.toLocaleString('pt-BR')} parcela${naTela>1?'s':''} SIGEF nesta área — toque numa para ver os dados`
+    : '🏛 Nenhuma parcela SIGEF certificada nesta área do mapa';
+}
+
+function _sigefOcultarParcelas() {
+  if (_sigefBaseLayer && map.hasLayer(_sigefBaseLayer)) { try { map.removeLayer(_sigefBaseLayer); } catch(e){} }
+}
+
+// Redesenha ao mover/aproximar o mapa (só no modo SIGEF)
+map.on('moveend', () => {
+  if (_fundMode !== 'sigef' || !_sigefGeojson) return;
+  clearTimeout(_sigefDrawTimer);
+  _sigefDrawTimer = setTimeout(_sigefDesenharParcelas, 120);
+});
 
 // ── CAR WMS tiles — leve e rápido ─────────────────────────────
 // Otimizações: 1 só camada (estado central) = 2x mais rápido que multi-camada;
@@ -6491,6 +6598,7 @@ async function consultarSIGEFPorPonto(lat, lon) {
     loading.style.display = 'none';
     if (achadas.length) {
       count.textContent = achadas.length + ' parcela' + (achadas.length > 1 ? 's' : '');
+      if (_sigefMarker) { try { map.removeLayer(_sigefMarker); } catch(e){} _sigefMarker = null; }
       if (_sigefLayer) map.removeLayer(_sigefLayer);
       _sigefLayer = L.geoJSON({ type:'FeatureCollection', features:achadas }, {
         style: { color:'#f39c12', weight:3, fillColor:'#2980b9', fillOpacity:0.25 },
@@ -6531,11 +6639,11 @@ async function consultarSIGEFPorPonto(lat, lon) {
     <div style="display:flex;flex-direction:column;gap:6px">
       <a href="${INCRA_ACERVO}" target="_blank" rel="noopener"
         style="display:block;text-align:center;padding:9px;background:rgba(41,128,185,.12);color:#2980b9;border:1px solid rgba(41,128,185,.3);border-radius:8px;font-size:11px;font-weight:700;text-decoration:none">
-        🗺 Mapa público de parcelas (Acervo INCRA)
+        🔎 Consulta pública de parcelas (SIGEF/INCRA)
       </a>
       <a href="${SIGEF_PORTAL}" target="_blank" rel="noopener"
         style="display:block;text-align:center;padding:9px;background:rgba(41,128,185,.07);color:#2980b9;border:1px solid rgba(41,128,185,.2);border-radius:8px;font-size:11px;font-weight:600;text-decoration:none">
-        🌐 Portal SIGEF/INCRA (consulta por código)
+        🌐 Portal SIGEF/INCRA (página inicial)
       </a>
     </div>`;
 }
@@ -6605,7 +6713,7 @@ function _sigefRenderCards(feats) {
       <div style="display:flex;gap:5px">
         <a href="${INCRA_ACERVO}" target="_blank" rel="noopener"
           style="flex:1;text-align:center;padding:6px 0;background:rgba(41,128,185,.1);color:#2980b9;border:1px solid rgba(41,128,185,.25);border-radius:6px;font-size:10px;font-weight:700;text-decoration:none">
-          🗺 Acervo
+          🔎 SIGEF
         </a>
         <button onclick="_sigefKml('${esc(String(cod).replace(/'/g,''))}')" style="flex:1;padding:6px 0;background:rgba(26,115,232,.1);color:#1a73e8;border:1px solid rgba(26,115,232,.25);border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">⬇ KML</button>
       </div>
@@ -6625,7 +6733,7 @@ function _sigefKml(cod) {
     const p = f.properties||{};
     return (p.codigo||p.parcela_codigo||p.CODIGO) === cod;
   });
-  if (!f) { window.open(INCRA_ACERVO, '_blank'); toast('Sem geometria local — abrindo Acervo INCRA', 'warn'); return; }
+  if (!f) { window.open(INCRA_ACERVO, '_blank'); toast('Sem geometria local — abrindo a consulta do SIGEF', 'warn'); return; }
   const geomKml = _geomToKml(f.geometry);
   if (!geomKml) { toast('Geometria não disponível', 'warn'); return; }
   const kml = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>
